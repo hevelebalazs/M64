@@ -1,0 +1,6 @@
+struct Bitmap
+{
+	width:Int32;
+	height:Int32;
+	memory:@UInt32;
+}
