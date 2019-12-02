@@ -2,8 +2,42 @@
 #include <stdlib.h>
 
 #define Assert(condition) if(!(condition)) {printf("%s (line %i) failed.\n", #condition, __LINE__); exit(-1);}
+#define Break() Assert(false)
 
 #define func
+
+struct MemArena
+{
+	char *memory;
+	int max_size;
+	int used_size;
+};
+
+MemArena
+func CreateArena(char *memory, int size)
+{
+	Assert(memory != 0);
+	Assert(size > 0);
+	MemArena arena = {};
+	arena.memory = memory;
+	arena.max_size = size;
+	arena.used_size = 0;
+	return arena;
+}
+
+#define CreateStaticArena(name, size) char name##_buffer[size]; MemArena name = CreateArena(name##_buffer, size);
+
+char *
+func ArenaAlloc(MemArena *arena, int size)
+{
+	char *memory = arena->memory + arena->used_size;
+	arena->used_size += size;
+	Assert(arena->used_size <= arena->max_size);
+	return memory;
+}
+
+#define ArenaAllocType(arena, type) (type *)ArenaAlloc(arena, sizeof(type))
+#define ArenaAllocArray(arena, count, type) (type *)ArenaAlloc(arena, (count) * sizeof(type))
 
 struct CodePosition
 {
@@ -12,6 +46,7 @@ struct CodePosition
 
 struct ParseInput
 {
+	MemArena *arena;
 	CodePosition *pos;
 };
 
@@ -232,10 +267,22 @@ func ReadNextToken(ParseInput *input)
 }
 
 bool
+func PeekToken(ParseInput *input, TokenId id)
+{
+	bool result = false;
+	
+	CodePosition start_pos = *input->pos;
+	Token token = ReadNextToken(input);
+	
+	result = (token.id == id);
+	*input->pos = start_pos;
+	return result;
+}
+
+bool
 func ReadToken(ParseInput *input, TokenId id)
 {
 	bool result = false;
-	SkipWhiteSpaceAndComments(input->pos);
 	
 	CodePosition start_pos = *input->pos;
 	Token token = ReadNextToken(input);
@@ -251,6 +298,260 @@ func ReadToken(ParseInput *input, TokenId id)
 
 #define MaxCodeSize 1024 * 1024
 static char global_code_buffer[MaxCodeSize];
+
+enum VarTypeId
+{
+	NoTypeId,
+	BaseTypeId,
+	PointerTypeId
+};
+
+struct VarType
+{
+	VarTypeId id;
+};
+
+enum BaseVarTypeId
+{
+	NoBaseTypeId,
+	Int32BaseTypeId,
+	UInt32BaseTypeId
+};
+
+struct BaseType
+{
+	VarType type;
+	
+	BaseVarTypeId base_id;
+};
+
+struct PointerType
+{
+	VarType type;
+	
+	VarType *pointed_type;
+};
+
+BaseType *
+func PushBaseType(MemArena *arena, BaseVarTypeId base_id)
+{
+	BaseType *base_type = ArenaAllocType(arena, BaseType);
+	base_type->type.id = BaseTypeId;
+	base_type->base_id = base_id;
+	return base_type;
+}
+
+PointerType *
+func PushPointerType(MemArena *arena, VarType *pointed_type)
+{
+	Assert(pointed_type != 0);
+	PointerType *type = ArenaAllocType(arena, PointerType);
+	type->type.id = PointerTypeId;
+	type->pointed_type = pointed_type;
+	return type;
+}
+
+VarType *
+func ReadVarType(ParseInput *input)
+{
+	VarType *type = 0;
+	
+	if(ReadToken(input, AtTokenId))
+	{
+		VarType *pointed_type = ReadVarType(input);
+		Assert(pointed_type != 0);
+		
+		type = (VarType *)PushPointerType(input->arena, pointed_type);
+	}
+	else
+	{
+		Token name = ReadNextToken(input);
+		Assert(name.id == NameTokenId);
+		if(TokenEquals(name, "Int32"))
+		{
+			type = (VarType *)PushBaseType(input->arena, Int32BaseTypeId);
+		}
+		else if(TokenEquals(name, "UInt32"))
+		{
+			type = (VarType *)PushBaseType(input->arena, UInt32BaseTypeId);
+		}
+	}
+	
+	return type;
+}
+
+struct StructVar
+{
+	Token name;
+	VarType *type;
+	StructVar *next;
+};
+
+struct StructDefinition
+{
+	Token name;
+	StructVar *first_var;
+};
+
+StructDefinition
+func ReadStructDefinition(ParseInput *input)
+{
+	StructDefinition definition = {};
+	Assert(ReadToken(input, StructTokenId));
+	
+	Token name = ReadNextToken(input);
+	Assert(name.id == NameTokenId);
+	
+	Assert(ReadToken(input, OpenCurlyBracketsTokenId));
+	
+	StructVar *first_var = 0;
+	StructVar *last_var = 0;
+	while(1)
+	{
+		if(ReadToken(input, CloseCurlyBracketsTokenId))
+		{
+			break;
+		}
+		
+		Token var_name = ReadNextToken(input);
+		Assert(var_name.id == NameTokenId);
+		
+		Assert(ReadToken(input, ColonTokenId));
+		
+		VarType *var_type = ReadVarType(input);
+		Assert(var_type != 0);
+		
+		Assert(ReadToken(input, SemicolonTokenId));
+		
+		StructVar *var = ArenaAllocType(input->arena, StructVar);
+		var->next = 0;
+		var->name = var_name;
+		var->type = var_type;
+		
+		if(!last_var)
+		{
+			Assert(!first_var);
+			first_var = var;
+			last_var = var;
+		}
+		else
+		{
+			Assert(first_var);
+			last_var->next = var;
+			last_var = var;
+		}
+	}
+	
+	definition.name = name;
+	definition.first_var = first_var;
+	
+	return definition;
+}
+
+struct Output
+{
+	MemArena *arena;
+};
+
+void 
+func WriteChar(Output *output, char c)
+{
+	char *mem = ArenaAllocType(output->arena, char);
+	*mem = c;
+}
+
+void
+func WriteString(Output *output, char *string)
+{
+	for(int i = 0; string[i]; i++)
+	{
+		WriteChar(output, string[i]);
+	}
+}
+
+void
+func WriteToken(Output *output, Token token)
+{
+	for(int i = 0; i < token.length; i++)
+	{
+		WriteChar(output, token.text[i]);
+	}
+}
+
+void 
+func WriteType(Output *output, VarType *type)
+{
+	Assert(type != 0);
+	switch(type->id)
+	{
+		case BaseTypeId:
+		{
+			BaseType *base_type = (BaseType *)type;
+			switch(base_type->base_id)
+			{
+				case Int32BaseTypeId:
+				{
+					WriteString(output, "int");
+					break;
+				}
+				case UInt32BaseTypeId:
+				{
+					WriteString(output, "unsigned int");
+					break;
+				}
+				default:
+				{
+					Break();
+				}
+			}
+			break;
+		}
+		case PointerTypeId:
+		{
+			PointerType *pointer_type = (PointerType *)type;
+			WriteType(output, pointer_type->pointed_type);
+			WriteString(output, " *");
+			break;
+		}
+		default:
+		{
+			Break();
+		}
+	}
+}
+
+void 
+func WriteTypeAndVar(Output *output, VarType *type, Token var_name)
+{	
+	WriteType(output, type);
+	if(type->id != PointerTypeId)
+	{
+		WriteString(output, " ");
+	}
+	WriteToken(output, var_name);
+}
+
+void
+func WriteStructDefinition(Output *output, StructDefinition struct_definition)
+{
+	WriteString(output, "struct ");
+	WriteToken(output, struct_definition.name);
+	WriteString(output, "\n");
+	
+	WriteString(output, "{\n");
+	
+	for(StructVar *var = struct_definition.first_var; var != 0; var = var->next)
+	{
+		WriteString(output, "\t");
+		WriteTypeAndVar(output, var->type, var->name);
+		WriteString(output, ";\n");
+	}
+	
+	WriteString(output, "};\n");
+}
+
+
+CreateStaticArena(global_arena, 64 * 1024 * 1024);
 
 int
 func main(int argument_count, char** arguments)
@@ -285,28 +586,24 @@ func main(int argument_count, char** arguments)
 	CodePosition pos = {};
 	pos.at = global_code_buffer;
 	ParseInput input = {};
+	input.arena = &global_arena;
 	input.pos = &pos;
 	
-	bool has_struct_definition = false;
-	Token struct_name = {};
-	
-	if(ReadToken(&input, StructTokenId))
-	{
-		has_struct_definition = true;
-		struct_name = ReadNextToken(&input);
-		Assert(struct_name.id == NameTokenId);	
-	}
+	Assert(PeekToken(&input, StructTokenId));
+	StructDefinition struct_definition = ReadStructDefinition(&input);
 	
 	FILE *cpp_file = 0;
 	fopen_s(&cpp_file, arguments[2], "w");
 	Assert(cpp_file != 0);
 	
-	fprintf(cpp_file, "// Generated code.\n");
+	Output output = {};
+	CreateStaticArena(out_arena, 64 * 1024);
+	output.arena = &out_arena;
 	
-	if(has_struct_definition)
-	{
-		fprintf(cpp_file, "struct %.*s {};\n", struct_name.length, struct_name.text);
-	}
+	WriteStructDefinition(&output, struct_definition);
+	
+	fprintf(cpp_file, "// Generated code.\n");
+	fprintf(cpp_file, "%.*s", out_arena.used_size, out_arena.memory);
 	
 	fclose(cpp_file);
 
