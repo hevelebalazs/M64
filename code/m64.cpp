@@ -727,15 +727,15 @@ func WriteTypeAndVar(Output *output, VarType *type, Token var_name)
 }
 
 void
-func WriteStructDefinition(Output *output, StructDefinition *struct_definition)
+func WriteStructDefinition(Output *output, StructDefinition *definition)
 {
 	WriteString(output, "struct ");
-	WriteToken(output, struct_definition->name);
+	WriteToken(output, definition->name);
 	WriteString(output, "\n");
 	
 	WriteString(output, "{\n");
 	
-	for(StructVar *var = struct_definition->first_var; var != 0; var = var->next)
+	for(StructVar *var = definition->first_var; var != 0; var = var->next)
 	{
 		WriteString(output, "\t");
 		WriteTypeAndVar(output, var->type, var->name);
@@ -824,8 +824,8 @@ func main(int argument_count, char** arguments)
 		}
 		else if(PeekToken(&input, FuncTokenId))
 		{
-			FuncDefinition func_definition = ReadFuncDefinition(&input);
-			WriteFuncDefinition(&output, func_definition);
+			FuncDefinition definition = ReadFuncDefinition(&input);
+			WriteFuncDefinition(&output, definition);
 		}
 		else
 		{
