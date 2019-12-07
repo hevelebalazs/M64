@@ -39,28 +39,21 @@ func ArenaAlloc(MemArena *arena, int size)
 #define ArenaAllocType(arena, type) (type *)ArenaAlloc(arena, sizeof(type))
 #define ArenaAllocArray(arena, count, type) (type *)ArenaAlloc(arena, (count) * sizeof(type))
 
-struct CodePosition
-{
-	char *at;
-};
-
-struct ParseInput
-{
-	MemArena *arena;
-	CodePosition *pos;
-};
-
 enum TokenId
 {
 	NoTokenId,
 	EndOfFileTokenId,
 	NameTokenId,
 	StructTokenId,
+	FuncTokenId,
+	OpenParenTokenId,
+	CloseParenTokenId,
 	OpenCurlyBracketsTokenId,
 	CloseCurlyBracketsTokenId,
 	ColonTokenId,
 	SemicolonTokenId,
-	AtTokenId
+	AtTokenId,
+	CommaTokenId
 };
 
 struct Token
@@ -68,6 +61,11 @@ struct Token
 	TokenId id;
 	char *text;
 	int length;
+};
+
+struct CodePosition
+{
+	char *at;
 };
 
 bool
@@ -196,6 +194,106 @@ func TokenEquals(Token token, char *text)
 	return (length_matches && text_matches);
 }
 
+bool
+func TokensEqual(Token token1, Token token2)
+{
+	bool length_equals = (token1.length == token2.length);
+	bool text_equals = false;
+	if(length_equals)
+	{
+		text_equals = true;
+		for(int i = 0; i < token1.length; i++)
+		{
+			if(token1.text[i] != token2.text[i])
+			{
+				text_equals = false;
+				break;
+			}
+		}
+	}
+	
+	bool equals = (length_equals && text_equals);
+	return equals;
+}
+
+enum VarTypeId
+{
+	NoTypeId,
+	BaseTypeId,
+	PointerTypeId,
+	StructTypeId
+};
+
+struct VarType
+{
+	VarTypeId id;
+};
+
+struct StructVar
+{
+	Token name;
+	StructVar *next;
+	VarType *type;
+};
+
+struct StructDefinition
+{
+	StructDefinition *prev;
+	StructDefinition *next;
+	
+	Token name;
+	StructVar *first_var;
+};
+
+struct FuncParam
+{	
+	FuncParam *next;
+	Token name;
+	VarType *type;
+};
+
+struct FuncDefinition
+{
+	Token name;
+	FuncParam *first_param;
+};
+
+struct ParseInput
+{
+	MemArena *arena;
+	CodePosition *pos;
+	
+	StructDefinition struct_sentinel;
+};
+
+enum BaseVarTypeId
+{
+	NoBaseTypeId,
+	Int32BaseTypeId,
+	UInt32BaseTypeId
+};
+
+struct BaseType
+{
+	VarType type;
+	
+	BaseVarTypeId base_id;
+};
+
+struct PointerType
+{
+	VarType type;
+	
+	VarType *pointed_type;
+};
+
+struct StructType
+{
+	VarType type;
+	
+	StructDefinition *definition;
+};
+
 Token
 func ReadNextToken(ParseInput *input)
 {
@@ -225,6 +323,18 @@ func ReadNextToken(ParseInput *input)
 		token.length = 1;
 		pos->at++;
 	}
+	else if(pos->at[0] == '(')
+	{
+		token.id = OpenParenTokenId;
+		token.length = 1;
+		pos->at++;
+	}
+	else if(pos->at[0] == ')')
+	{
+		token.id = CloseParenTokenId;
+		token.length = 1;
+		pos->at++;
+	}
 	else if(pos->at[0] == ':')
 	{
 		token.id = ColonTokenId;
@@ -243,6 +353,12 @@ func ReadNextToken(ParseInput *input)
 		token.length = 1;
 		pos->at++;
 	}
+	else if(pos->at[0] == ',')
+	{
+		token.id = CommaTokenId;
+		token.length = 1;
+		pos->at++;
+	}
 	else if(IsAlpha(pos->at[0]))
 	{
 		while(IsAlpha(pos->at[0]) || IsDigit(pos->at[0]))
@@ -254,6 +370,10 @@ func ReadNextToken(ParseInput *input)
 		if(TokenEquals(token, "struct"))
 		{
 			token.id = StructTokenId;
+		}
+		else if(TokenEquals(token, "func"))
+		{
+			token.id = FuncTokenId;
 		}
 		else
 		{
@@ -279,6 +399,7 @@ func PeekToken(ParseInput *input, TokenId id)
 	return result;
 }
 
+
 bool
 func ReadToken(ParseInput *input, TokenId id)
 {
@@ -299,39 +420,6 @@ func ReadToken(ParseInput *input, TokenId id)
 #define MaxCodeSize 1024 * 1024
 static char global_code_buffer[MaxCodeSize];
 
-enum VarTypeId
-{
-	NoTypeId,
-	BaseTypeId,
-	PointerTypeId
-};
-
-struct VarType
-{
-	VarTypeId id;
-};
-
-enum BaseVarTypeId
-{
-	NoBaseTypeId,
-	Int32BaseTypeId,
-	UInt32BaseTypeId
-};
-
-struct BaseType
-{
-	VarType type;
-	
-	BaseVarTypeId base_id;
-};
-
-struct PointerType
-{
-	VarType type;
-	
-	VarType *pointed_type;
-};
-
 BaseType *
 func PushBaseType(MemArena *arena, BaseVarTypeId base_id)
 {
@@ -349,6 +437,37 @@ func PushPointerType(MemArena *arena, VarType *pointed_type)
 	type->type.id = PointerTypeId;
 	type->pointed_type = pointed_type;
 	return type;
+}
+
+StructType *
+func PushStructType(MemArena *arena, StructDefinition *definition)
+{
+	Assert(definition != 0);
+	StructType *type = ArenaAllocType(arena, StructType);
+	type->type.id = StructTypeId;
+	type->definition = definition;
+	return type;
+}
+
+StructDefinition *
+func FindStructDefinitionByName(ParseInput *input, Token name)
+{
+	Assert(name.id == NameTokenId);
+	StructDefinition *result = 0;
+	
+	StructDefinition *definition = input->struct_sentinel.next;
+	while(definition != &input->struct_sentinel)
+	{
+		if(TokensEqual(definition->name, name))
+		{
+			result = definition;
+			break;
+		}
+			
+		definition = definition->next;
+	}
+	
+	return result;
 }
 
 VarType *
@@ -375,28 +494,35 @@ func ReadVarType(ParseInput *input)
 		{
 			type = (VarType *)PushBaseType(input->arena, UInt32BaseTypeId);
 		}
+		else
+		{
+			StructDefinition *struct_definition = FindStructDefinitionByName(input, name);
+			if(struct_definition)
+			{
+				type = (VarType *)PushStructType(input->arena, struct_definition);
+			}
+			else
+			{
+				Break();
+			}
+		}
 	}
-	
 	return type;
 }
 
-struct StructVar
-{
-	Token name;
-	VarType *type;
-	StructVar *next;
-};
-
-struct StructDefinition
-{
-	Token name;
-	StructVar *first_var;
-};
-
-StructDefinition
+StructDefinition *
 func ReadStructDefinition(ParseInput *input)
 {
-	StructDefinition definition = {};
+	StructDefinition *definition = ArenaAllocType(input->arena, StructDefinition);
+	
+	StructDefinition *next = &input->struct_sentinel;
+	StructDefinition *prev = next->prev;
+	
+	definition->prev = prev;
+	definition->next = next;
+	prev->next = definition;
+	next->prev = definition;
+	
 	Assert(ReadToken(input, StructTokenId));
 	
 	Token name = ReadNextToken(input);
@@ -442,9 +568,70 @@ func ReadStructDefinition(ParseInput *input)
 		}
 	}
 	
-	definition.name = name;
-	definition.first_var = first_var;
+	definition->name = name;
+	definition->first_var = first_var;
 	
+	return definition;
+}
+
+FuncDefinition
+func ReadFuncDefinition(ParseInput *input)
+{
+	FuncDefinition definition = {};
+	Assert(ReadToken(input, FuncTokenId));
+	
+	Token name = ReadNextToken(input);
+	Assert(name.id == NameTokenId);
+	
+	Assert(ReadToken(input, OpenParenTokenId));
+	
+	FuncParam *first_param = 0;
+	FuncParam *last_param = 0;
+	
+	bool is_first_param = true;
+	
+	while(1)
+	{
+		if(ReadToken(input, CloseParenTokenId))
+		{
+			break;
+		}
+		
+		if(!is_first_param)
+		{
+			Assert(ReadToken(input, CommaTokenId));
+		}
+		is_first_param = false;
+		
+		Token var_name = ReadNextToken(input);
+		Assert(var_name.id == NameTokenId);
+		
+		Assert(ReadToken(input, ColonTokenId));
+		
+		VarType *var_type = ReadVarType(input);
+		Assert(var_type != 0);
+		
+		FuncParam *param = ArenaAllocType(input->arena, FuncParam);
+		param->next = 0;
+		param->name = var_name;
+		param->type = var_type;
+		
+		if(!last_param)
+		{
+			Assert(!first_param);
+			first_param = param;
+			last_param = param;
+		}
+		else
+		{
+			Assert(first_param);
+			last_param->next = param;
+			last_param = param;
+		}
+	}
+	
+	definition.name = name;
+	definition.first_param  = first_param;
 	return definition;
 }
 
@@ -513,6 +700,14 @@ func WriteType(Output *output, VarType *type)
 			WriteString(output, " *");
 			break;
 		}
+		case StructTypeId:
+		{
+			StructType *struct_type = (StructType *)type;
+			StructDefinition *definition = struct_type->definition;
+			Assert(definition != 0);
+			WriteToken(output, definition->name);
+			break;
+		}
 		default:
 		{
 			Break();
@@ -532,15 +727,15 @@ func WriteTypeAndVar(Output *output, VarType *type, Token var_name)
 }
 
 void
-func WriteStructDefinition(Output *output, StructDefinition struct_definition)
+func WriteStructDefinition(Output *output, StructDefinition *struct_definition)
 {
 	WriteString(output, "struct ");
-	WriteToken(output, struct_definition.name);
+	WriteToken(output, struct_definition->name);
 	WriteString(output, "\n");
 	
 	WriteString(output, "{\n");
 	
-	for(StructVar *var = struct_definition.first_var; var != 0; var = var->next)
+	for(StructVar *var = struct_definition->first_var; var != 0; var = var->next)
 	{
 		WriteString(output, "\t");
 		WriteTypeAndVar(output, var->type, var->name);
@@ -550,6 +745,25 @@ func WriteStructDefinition(Output *output, StructDefinition struct_definition)
 	WriteString(output, "};\n");
 }
 
+void
+func WriteFuncDefinition(Output *output, FuncDefinition definition)
+{
+	WriteString(output, "void ");
+	WriteToken(output, definition.name);
+	WriteString(output, "(");
+	
+	for(FuncParam *param = definition.first_param; param != 0; param = param->next)
+	{
+		WriteTypeAndVar(output, param->type, param->name);
+		
+		if(param->next)
+		{
+			WriteString(output, ", ");
+		}
+	}
+	
+	WriteString(output, ") {}\n");
+}
 
 CreateStaticArena(global_arena, 64 * 1024 * 1024);
 
@@ -589,18 +803,39 @@ func main(int argument_count, char** arguments)
 	input.arena = &global_arena;
 	input.pos = &pos;
 	
-	Assert(PeekToken(&input, StructTokenId));
-	StructDefinition struct_definition = ReadStructDefinition(&input);
-	
-	FILE *cpp_file = 0;
-	fopen_s(&cpp_file, arguments[2], "w");
-	Assert(cpp_file != 0);
+	input.struct_sentinel.prev = &input.struct_sentinel;
+	input.struct_sentinel.next = &input.struct_sentinel;
 	
 	Output output = {};
 	CreateStaticArena(out_arena, 64 * 1024);
 	output.arena = &out_arena;
 	
-	WriteStructDefinition(&output, struct_definition);
+	while(1)
+	{
+		if(PeekToken(&input, EndOfFileTokenId))
+		{
+			break;
+		}
+		
+		if(PeekToken(&input, StructTokenId))
+		{
+			StructDefinition *definition = ReadStructDefinition(&input);
+			WriteStructDefinition(&output, definition);
+		}
+		else if(PeekToken(&input, FuncTokenId))
+		{
+			FuncDefinition func_definition = ReadFuncDefinition(&input);
+			WriteFuncDefinition(&output, func_definition);
+		}
+		else
+		{
+			Break();
+		}
+	}
+	
+	FILE *cpp_file = 0;
+	fopen_s(&cpp_file, arguments[2], "w");
+	Assert(cpp_file != 0);
 	
 	fprintf(cpp_file, "// Generated code.\n");
 	fprintf(cpp_file, "%.*s", out_arena.used_size, out_arena.memory);

@@ -4,3 +4,5 @@ struct Bitmap
 	height:Int32;
 	memory:@UInt32;
 }
+
+func ClearBitmap(bitmap:@Bitmap, color_code:UInt32)
