@@ -5,6 +5,7 @@
 #define Break() Assert(false)
 
 #define func
+#define decl
 
 struct MemArena
 {
@@ -41,19 +42,26 @@ func ArenaAlloc(MemArena *arena, int size)
 
 enum TokenId
 {
-	NoTokenId,
-	EndOfFileTokenId,
-	NameTokenId,
-	StructTokenId,
-	FuncTokenId,
-	OpenParenTokenId,
-	CloseParenTokenId,
-	OpenCurlyBracketsTokenId,
-	CloseCurlyBracketsTokenId,
-	ColonTokenId,
-	SemicolonTokenId,
 	AtTokenId,
-	CommaTokenId
+	CloseCurlyBracketsTokenId,
+	CloseParenTokenId,
+	ColonEqualsTokenId,
+	ColonTokenId,
+	CommaTokenId,
+	DotTokenId,
+	EndOfFileTokenId,
+	ForTokenId,
+	FuncTokenId,
+	IntegerConstantTokenId,
+	LessThanTokenId,
+	NameTokenId,
+	NoTokenId,
+	OpenCurlyBracketsTokenId,
+	OpenParenTokenId,
+	SemicolonTokenId,
+	StarTokenId,
+	StructTokenId,
+	ToTokenId
 };
 
 struct Token
@@ -219,6 +227,7 @@ func TokensEqual(Token token1, Token token2)
 enum VarTypeId
 {
 	NoTypeId,
+
 	BaseTypeId,
 	PointerTypeId,
 	StructTypeId
@@ -252,10 +261,25 @@ struct FuncParam
 	VarType *type;
 };
 
+struct decl BlockInstruction;
 struct FuncDefinition
 {
 	Token name;
 	FuncParam *first_param;
+	
+	BlockInstruction *body;
+};
+
+struct Var
+{
+	VarType *type;
+	Token name;
+};
+
+struct VarStack
+{
+	Var *vars;
+	int size;
 };
 
 struct ParseInput
@@ -263,7 +287,86 @@ struct ParseInput
 	MemArena *arena;
 	CodePosition *pos;
 	
+	VarStack var_stack;
+	
+	Token last_token;
+	
 	StructDefinition struct_sentinel;
+};
+
+enum ExpressionId
+{
+	IntegerConstantExpressionId,
+	ProductExpressionId,
+	StructVarExpressionId,
+	VarExpressionId
+};
+
+struct Expression
+{
+	ExpressionId id;
+	
+	VarType *type;
+};
+
+struct IntegerConstantExpression
+{
+	Expression expression;
+	
+	Token token;
+};
+
+struct ProductExpression
+{
+	Expression expression;
+	
+	Expression *left;
+	Expression *right;
+};
+
+struct StructVarExpression
+{
+	Expression expression;
+	
+	StructDefinition *definition;
+	Token var_name;
+};
+
+struct VarExpression
+{
+	Expression expression;
+	
+	Token var_name;
+};
+
+enum InstructionId
+{
+	BlockInstructionId,
+	ForInstructionId
+};
+
+struct Instruction
+{
+	Instruction *next;
+	InstructionId id;
+};
+
+struct BlockInstruction
+{
+	Instruction instruction;
+
+	Instruction *first_instruction;
+};
+
+struct ForInstruction
+{
+	Instruction instruction;
+	
+	Token iterator_name;
+	Expression *start;
+	Expression *end;
+
+	BlockInstruction *body;
 };
 
 enum BaseVarTypeId
@@ -335,11 +438,26 @@ func ReadNextToken(ParseInput *input)
 		token.length = 1;
 		pos->at++;
 	}
-	else if(pos->at[0] == ':')
+	else if(pos->at[0] == '<')
 	{
-		token.id = ColonTokenId;
+		token.id = LessThanTokenId;
 		token.length = 1;
 		pos->at++;
+	}
+	else if(pos->at[0] == ':')
+	{
+		if(pos->at[1] == '=')
+		{
+			token.id = ColonEqualsTokenId;
+			token.length = 2;
+			pos->at += 2;
+		}
+		else
+		{
+			token.id = ColonTokenId;
+			token.length = 1;
+			pos->at++;
+		}
 	}
 	else if(pos->at[0] == ';')
 	{
@@ -353,11 +471,40 @@ func ReadNextToken(ParseInput *input)
 		token.length = 1;
 		pos->at++;
 	}
+	else if(pos->at[0] == '*')
+	{
+		token.id = StarTokenId;
+		token.length = 1;
+		pos->at++;
+	}
+	else if(pos->at[0] == '.')
+	{
+		token.id = DotTokenId;
+		token.length = 1;
+		pos->at++;
+	}
 	else if(pos->at[0] == ',')
 	{
 		token.id = CommaTokenId;
 		token.length = 1;
 		pos->at++;
+	}
+	else if(IsDigit(pos->at[0]))
+	{
+		while(1)
+		{
+			if(IsDigit(pos->at[0]))
+			{
+				token.length++;
+				pos->at++;
+			}
+			else
+			{
+				break;
+			}
+		}
+		
+		token.id = IntegerConstantTokenId;
 	}
 	else if(IsAlpha(pos->at[0]))
 	{
@@ -367,13 +514,21 @@ func ReadNextToken(ParseInput *input)
 			pos->at++;
 		}
 		
-		if(TokenEquals(token, "struct"))
+		if(TokenEquals(token, "for"))
 		{
-			token.id = StructTokenId;
+			token.id = ForTokenId;
 		}
 		else if(TokenEquals(token, "func"))
 		{
 			token.id = FuncTokenId;
+		}
+		else if(TokenEquals(token, "struct"))
+		{
+			token.id = StructTokenId;
+		}
+		else if(TokenEquals(token, "to"))
+		{
+			token.id = ToTokenId;
 		}
 		else
 		{
@@ -383,6 +538,18 @@ func ReadNextToken(ParseInput *input)
 	
 	Assert(token.id != NoTokenId);
 	
+	input->last_token = token;
+	
+	return token;
+}
+
+Token
+func PeekNextToken(ParseInput *input)
+{
+	CodePosition start_pos = *input->pos;
+	Token token = ReadNextToken(input);
+	
+	*input->pos = start_pos;
 	return token;
 }
 
@@ -510,6 +677,218 @@ func ReadVarType(ParseInput *input)
 	return type;
 }
 
+#define VarStackMaxSize 1024
+
+static Var *
+func GetVar(VarStack *stack, Token name)
+{
+	Assert(name.id == NameTokenId);
+	
+	Var *result = 0;
+	
+	for(int i = 0; i < stack->size; i++)
+	{
+		Var *var = &stack->vars[i];
+		if(TokensEqual(var->name, name))
+		{
+			result = var;
+			break;
+		}
+	}
+	
+	return result;
+}
+
+bool
+func VarExists(VarStack *var_stack, Token name)
+{
+	Var *var = GetVar(var_stack, name);
+	bool exists = (var != 0);
+	return exists;
+}
+
+void
+func PushVar(VarStack *var_stack, Var var)
+{
+	Assert(var.name.id == NameTokenId);
+	Assert(var.type != 0);
+	Assert(!VarExists(var_stack, var.name));
+	Assert(var_stack->size < VarStackMaxSize);
+	var_stack->vars[var_stack->size] = var;
+	var_stack->size++;
+}
+
+StructVar *
+func GetStructVar(StructDefinition *definition, Token name)
+{
+	StructVar *result = 0;
+	StructVar *var = definition->first_var;
+	while(var)
+	{
+		if(TokensEqual(var->name, name))
+		{
+			result = var;
+			break;
+		}
+
+		var = var->next;
+	}
+	return result;
+}
+
+static Expression *
+func ReadNumberLevelExpression(ParseInput *input)
+{
+	Expression *result = 0;
+	
+	if(ReadToken(input, IntegerConstantTokenId))
+	{
+		IntegerConstantExpression *expression = ArenaAllocType(input->arena, IntegerConstantExpression);
+		expression->expression.id = IntegerConstantExpressionId;
+		expression->expression.type = (VarType *)PushBaseType(input->arena, Int32BaseTypeId);
+		
+		expression->token = input->last_token;
+		result = (Expression *)expression;
+	}
+	else if(ReadToken(input, NameTokenId))
+	{
+		Token var_name = input->last_token;
+		Assert(var_name.id == NameTokenId);
+		
+		Var *var = GetVar(&input->var_stack, var_name);
+		Assert(var != 0);
+		
+		VarExpression *expression = ArenaAllocType(input->arena, VarExpression);
+		expression->expression.id = VarExpressionId;
+		expression->expression.type = var->type;
+		
+		expression->var_name = var_name;
+		result = (Expression *)expression;
+		
+		while(1)
+		{
+			if(ReadToken(input, DotTokenId))
+			{
+				VarType *type = result->type;
+				while(type->id == PointerTypeId)
+				{
+					PointerType *pointer_type = (PointerType *)type;
+					type = pointer_type->pointed_type;
+				}
+				
+				Assert(type->id == StructTypeId);
+				StructType *struct_type = (StructType *)type;
+				StructDefinition *struct_definition = struct_type->definition;
+				Assert(struct_definition != 0);
+				
+				Token var_name = ReadNextToken(input);
+				Assert(var_name.id == NameTokenId);
+				
+				StructVar *struct_var = GetStructVar(struct_definition, var_name);
+				Assert(struct_var != 0);
+
+				StructVarExpression *expression = ArenaAllocType(input->arena, StructVarExpression);
+				expression->expression.id = StructVarExpressionId;
+				expression->expression.type = struct_var->type;
+				
+				expression->definition = struct_definition;
+				expression->var_name = struct_var->name;
+				
+				result = (Expression *)expression;
+			}
+			else
+			{
+				break;
+			}
+		}
+	}
+	
+	Assert(result != 0);
+	return result;
+}
+
+static bool
+func TypesEqual(VarType *type1, VarType *type2)
+{
+	bool equal = false;
+	Assert(type1 != 0 && type2 != 0);
+	if(type1->id == type2->id)
+	{
+		switch(type1->id)
+		{
+			case BaseTypeId:
+			{
+				BaseType *base_type1 = (BaseType *)type1;
+				BaseType *base_type2 = (BaseType *)type2;
+				equal = (base_type1->base_id == base_type2->base_id);
+				break;
+			}
+			case PointerTypeId:
+			{
+				PointerType *pointer_type1 = (PointerType *)type1;
+				PointerType *pointer_type2 = (PointerType *)type2;
+				equal = (TypesEqual(pointer_type1->pointed_type, pointer_type2->pointed_type));
+				break;
+			}
+			case StructTypeId:
+			{
+				StructType *struct_type1 = (StructType *)type1;
+				StructType *struct_type2 = (StructType *)type2;
+				equal = (struct_type1->definition == struct_type2->definition);
+				break;
+			}
+			default:
+			{
+				Break();
+			}
+		}
+	}
+	
+	return equal;
+}
+
+static Expression *
+func ReadProductLevelExpression(ParseInput *input)
+{
+	Expression *result = ReadNumberLevelExpression(input);
+	
+	while(1)
+	{
+		if(ReadToken(input, StarTokenId))
+		{
+			Expression *left = result;
+			Expression *right = ReadNumberLevelExpression(input);
+			Assert(right != 0);
+			
+			ProductExpression *expression = ArenaAllocType(input->arena, ProductExpression);
+			
+			expression->expression.id = ProductExpressionId;
+			Assert(TypesEqual(left->type, right->type));
+			expression->expression.type = left->type;
+
+			expression->left = left;
+			expression->right = right;
+			result = (Expression *)expression;
+		}
+		else
+		{
+			break;
+		}
+	}
+	
+	Assert(result != 0);
+	return result;
+}
+
+static Expression *
+func ReadExpression(ParseInput *input)
+{
+	Expression *result = ReadProductLevelExpression(input);
+	
+	Assert(result != 0);
+	return result;
+}
+
 StructDefinition *
 func ReadStructDefinition(ParseInput *input)
 {
@@ -574,6 +953,154 @@ func ReadStructDefinition(ParseInput *input)
 	return definition;
 }
 
+Instruction *
+func decl ReadInstruction(ParseInput *input);
+
+BlockInstruction *
+func ReadBlockInstruction(ParseInput *input)
+{
+	Assert(ReadToken(input, OpenCurlyBracketsTokenId));
+	
+	Instruction *first_instruction = 0;
+	Instruction *last_instruction = 0;
+	
+	while(1)
+	{
+		if(ReadToken(input, CloseCurlyBracketsTokenId))
+		{
+			break;
+		}
+		
+		Instruction *instruction = ReadInstruction(input);
+		if(first_instruction == 0)
+		{
+			first_instruction = instruction;
+			last_instruction = instruction;
+		}
+		else
+		{
+			last_instruction->next = instruction;
+			last_instruction = instruction;
+		}
+	}
+	
+	BlockInstruction *result = ArenaAllocType(input->arena, BlockInstruction);
+	result->instruction.id = BlockInstructionId;
+	result->instruction.next = 0;
+	result->first_instruction = first_instruction;
+	
+	return result;
+}
+
+ForInstruction *
+func ReadForInstruction(ParseInput *input)
+{
+	Assert(ReadToken(input, ForTokenId));
+	
+	Token iterator_name = ReadNextToken(input);
+	Assert(iterator_name.id == NameTokenId);
+	
+	Assert(ReadToken(input, ColonEqualsTokenId));
+	
+	Expression *start = ReadExpression(input);
+	
+	Assert(ReadToken(input, ToTokenId));
+
+	Assert(ReadToken(input, LessThanTokenId));
+	
+	Expression *end = ReadExpression(input);
+	
+	BlockInstruction *body = ReadBlockInstruction(input);
+	
+	ForInstruction *result = ArenaAllocType(input->arena, ForInstruction);
+	result->instruction.id = ForInstructionId;
+	result->instruction.next = 0;
+
+	result->iterator_name = iterator_name;
+	result->start = start;
+	result->end = end;
+	result->body = body;
+	
+	return result;
+}
+
+Instruction *
+func ReadInstruction(ParseInput *input)
+{
+	Instruction *instruction = 0;
+	if(PeekToken(input, ForTokenId))
+	{
+		instruction = (Instruction *)ReadForInstruction(input);
+	}
+	
+	Assert(instruction != 0);
+	return instruction;
+}
+
+bool 
+func InstructionNeedsSemicolon(InstructionId id)
+{
+	bool needs_semicolon = false;
+	switch(id)
+	{
+		case ForInstructionId:
+		case BlockInstructionId:
+		{
+			needs_semicolon = false;
+			break;
+		}
+		default:
+		{
+			needs_semicolon= true;
+			break;
+		}
+	}
+
+	return needs_semicolon;
+}
+
+BlockInstruction *
+func ReadBlock(ParseInput *input)
+{
+	Assert(ReadToken(input, OpenCurlyBracketsTokenId));
+	
+	Instruction *first_instruction = 0;
+	Instruction *last_instruction = 0;
+	while(1)
+	{
+		if(ReadToken(input, CloseCurlyBracketsTokenId))
+		{
+			break;
+		}
+		
+		Instruction *instruction = ReadInstruction(input);
+		Assert(instruction != 0);
+		if(InstructionNeedsSemicolon(instruction->id))
+		{
+			Assert(ReadToken(input, SemicolonTokenId));
+		}
+		
+		if(!first_instruction)
+		{
+			first_instruction = instruction;
+		}
+		else
+		{
+			last_instruction->next = instruction;
+		}
+		
+		last_instruction = instruction;
+		last_instruction->next = 0;
+	}
+	
+	BlockInstruction *block = ArenaAllocType(input->arena, BlockInstruction);
+	block->instruction.id = BlockInstructionId;
+	block->instruction.next = 0;
+	block->first_instruction = first_instruction;
+	
+	return block;
+}
+
 FuncDefinition
 func ReadFuncDefinition(ParseInput *input)
 {
@@ -630,8 +1157,17 @@ func ReadFuncDefinition(ParseInput *input)
 		}
 	}
 	
+	for(FuncParam *param = first_param; param != 0; param = param->next)
+	{
+		Var var = {};
+		var.name = param->name;
+		var.type = param->type;
+		PushVar(&input->var_stack, var);
+	}
+	
 	definition.name = name;
 	definition.first_param  = first_param;
+	definition.body = ReadBlock(input);
 	return definition;
 }
 
@@ -802,6 +1338,9 @@ func main(int argument_count, char** arguments)
 	ParseInput input = {};
 	input.arena = &global_arena;
 	input.pos = &pos;
+	
+	input.var_stack.vars = ArenaAllocArray(input.arena, VarStackMaxSize, Var);
+	input.var_stack.size = 0;
 	
 	input.struct_sentinel.prev = &input.struct_sentinel;
 	input.struct_sentinel.next = &input.struct_sentinel;
