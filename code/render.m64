@@ -9,6 +9,6 @@ func ClearBitmap(bitmap:@Bitmap, color_code:UInt32)
 {
 	for index := 0 to < bitmap.width * bitmap.height
 	{
-		// bitmap.memory[index] = color_code;
+		bitmap.memory[index] = color_code;
 	}
 }

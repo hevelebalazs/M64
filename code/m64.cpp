@@ -44,12 +44,14 @@ enum TokenId
 {
 	AtTokenId,
 	CloseCurlyBracketsTokenId,
+	CloseSquareBracketsTokenId,
 	CloseParenTokenId,
 	ColonEqualsTokenId,
 	ColonTokenId,
 	CommaTokenId,
 	DotTokenId,
 	EndOfFileTokenId,
+	EqualsTokenId,
 	ForTokenId,
 	FuncTokenId,
 	IntegerConstantTokenId,
@@ -57,6 +59,7 @@ enum TokenId
 	NameTokenId,
 	NoTokenId,
 	OpenCurlyBracketsTokenId,
+	OpenSquareBracketsTokenId,
 	OpenParenTokenId,
 	SemicolonTokenId,
 	StarTokenId,
@@ -228,6 +231,7 @@ enum VarTypeId
 {
 	NoTypeId,
 
+	ArrayTypeId,
 	BaseTypeId,
 	PointerTypeId,
 	StructTypeId
@@ -236,6 +240,14 @@ enum VarTypeId
 struct VarType
 {
 	VarTypeId id;
+};
+
+struct decl Expression;
+
+struct ArrayType
+{
+	VarType *element_type;
+	Expression *element_count;
 };
 
 struct StructVar
@@ -296,6 +308,7 @@ struct ParseInput
 
 enum ExpressionId
 {
+	ArrayIndexExpressionId,
 	IntegerConstantExpressionId,
 	ProductExpressionId,
 	StructVarExpressionId,
@@ -307,6 +320,14 @@ struct Expression
 	ExpressionId id;
 	
 	VarType *type;
+};
+
+struct ArrayIndexExpression
+{
+	Expression expression;
+	
+	Expression *array;
+	Expression *index;
 };
 
 struct IntegerConstantExpression
@@ -328,7 +349,7 @@ struct StructVarExpression
 {
 	Expression expression;
 	
-	StructDefinition *definition;
+	Expression *struct_expression;
 	Token var_name;
 };
 
@@ -438,9 +459,27 @@ func ReadNextToken(ParseInput *input)
 		token.length = 1;
 		pos->at++;
 	}
+	else if(pos->at[0] == '[')
+	{
+		token.id = OpenSquareBracketsTokenId;
+		token.length = 1;
+		pos->at++;
+	}
+	else if(pos->at[0] == ']')
+	{
+		token.id = CloseSquareBracketsTokenId;
+		token.length = 1;
+		pos->at++;
+	}
 	else if(pos->at[0] == '<')
 	{
 		token.id = LessThanTokenId;
+		token.length = 1;
+		pos->at++;
+	}
+	else if(pos->at[0] == '=')
+	{
+		token.id = EqualsTokenId;
 		token.length = 1;
 		pos->at++;
 	}
@@ -736,6 +775,18 @@ func GetStructVar(StructDefinition *definition, Token name)
 	return result;
 }
 
+static VarType *
+func GetArrayElementType(Expression *expression)
+{
+	VarType *type = expression->type;
+	Assert(type->id == ArrayTypeId);
+	ArrayType *array_type = (ArrayType *)type;
+	VarType *element_type = array_type->element_type;
+	return element_type;
+}
+
+func decl Expression *ReadExpression(ParseInput *input);
+
 static Expression *
 func ReadNumberLevelExpression(ParseInput *input)
 {
@@ -769,8 +820,9 @@ func ReadNumberLevelExpression(ParseInput *input)
 		{
 			if(ReadToken(input, DotTokenId))
 			{
+				Expression *struct_expression = result;
 				VarType *type = result->type;
-				while(type->id == PointerTypeId)
+				if(type->id == PointerTypeId)
 				{
 					PointerType *pointer_type = (PointerType *)type;
 					type = pointer_type->pointed_type;
@@ -791,8 +843,23 @@ func ReadNumberLevelExpression(ParseInput *input)
 				expression->expression.id = StructVarExpressionId;
 				expression->expression.type = struct_var->type;
 				
-				expression->definition = struct_definition;
+				expression->struct_expression = struct_expression;
 				expression->var_name = struct_var->name;
+				
+				result = (Expression *)expression;
+			}
+			else if(ReadToken(input, OpenSquareBracketsTokenId))
+			{
+				Expression *array_expression = result;
+				Expression *index_expression = ReadExpression(input);
+				Assert(index_expression != 0);
+				
+				ArrayIndexExpression *expression = ArenaAllocType(input->arena, ArrayIndexExpression);
+				expression->expression.id = ArrayIndexExpressionId;
+				expression->expression.type = GetArrayElementType(array_expression);
+				
+				expression->array = array_expression;
+				expression->index = index_expression;
 				
 				result = (Expression *)expression;
 			}
@@ -1032,6 +1099,18 @@ func ReadInstruction(ParseInput *input)
 	{
 		instruction = (Instruction *)ReadForInstruction(input);
 	}
+	else
+	{
+		Expression *left = ReadExpression(input);
+		Assert(left != 0);
+		
+		Assert(ReadToken(input, EqualsTokenId));
+		
+		Expression *right = ReadExpression(input);
+		Assert(right != 0);
+		
+		Assert(ReadToken(input, SemicolonTokenId));
+	}
 	
 	Assert(instruction != 0);
 	return instruction;
@@ -1163,6 +1242,7 @@ func ReadFuncDefinition(ParseInput *input)
 		var.name = param->name;
 		var.type = param->type;
 		PushVar(&input->var_stack, var);
+		printf("Pushed var %.*s\n", var.name.length, var.name.text);
 	}
 	
 	definition.name = name;
