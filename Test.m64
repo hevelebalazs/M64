@@ -1,0 +1,19 @@
+struct Bitmap
+{
+	width: UInt32;
+	height: UInt32;
+
+	pixels:[100][100]UInt32;
+}
+
+func ClearBitmapToColor(bitmap:@Bitmap, color:UInt32)
+{
+	use bitmap;
+	for row := 0 to < height
+	{
+		for col := 0 to < width
+		{
+			pixels[row][col] = color;
+		}
+	}
+}
