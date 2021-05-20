@@ -1,6 +1,16 @@
 func MetaTest()
 {
-	i := 15;
-	#j := i;
-	j = 1;
+	#N := 50;
+	a:[N][N]Int32;
+	
+	for i := [] in a
+	{
+		for j := [] in a[i]
+		{
+			#aij := a[i][j];
+			aij = 10;
+			aij := 10;
+		}
+	}
+
 }

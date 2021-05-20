@@ -5321,9 +5321,13 @@ func ReadInstruction(ParseInput *input)
 		{
 			SetError(input, "Variable already exists.");
 		}
+		if(MetaVarExists(&input->meta_var_stack, var_name))
+		{
+			SetError(input, "A meta variable with this name already exists.");
+		}
 
 		VarType *var_type = ReadVarType(input);
-		if(VarTypeHasMetaData (var_type))
+		if(VarTypeHasMetaData(var_type))
 		{
 			SetError(input, "Locally defined variable cannot have meta data.");
 		}
@@ -5409,6 +5413,10 @@ func ReadInstruction(ParseInput *input)
 		{
 			SetError(input, "Variable already exists.");
 		}
+		if(MetaVarExists(&input->meta_var_stack, var_name))
+		{
+			SetError(input, "A meta variable with this name already exists.");
+		}
 
 		Expression *init = ReadExpression(input);
 		if(!init)
@@ -5448,6 +5456,10 @@ func ReadInstruction(ParseInput *input)
 		if(MetaVarExists(&input->meta_var_stack, var_name))
 		{
 			SetError(input, "Meta variable already exists.");
+		}
+		if(VarExists(&input->var_stack, var_name))
+		{
+			SetError(input, "A variable with this name already exists.");
 		}
 		
 		Expression *expression = ReadExpression(input);
