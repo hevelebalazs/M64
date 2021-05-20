@@ -22,6 +22,7 @@
     <ClCompile Include="M64.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="Meta.m64" />
     <None Include="Test.m64" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

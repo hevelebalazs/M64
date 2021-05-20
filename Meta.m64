@@ -1,0 +1,6 @@
+func MetaTest()
+{
+	i := 15;
+	#j := i;
+	j = 1;
+}

@@ -474,6 +474,22 @@ struct VarStack
 	int size;
 };
 
+struct CreateMetaVariableInstruction;
+struct MetaVar
+{
+	VarType *type;
+	Token name;
+	Expression *expression;
+	CreateMetaVariableInstruction *create_instruction;
+};
+
+#define MetaVarStackMaxSize 64
+struct MetaVarStack
+{
+	MetaVar *vars;
+	int size;
+};
+
 enum ExpressionId
 {
 	NoExpressionId,
@@ -499,6 +515,7 @@ enum ExpressionId
 	LeftShiftExpressionId,
 	LessThanExpressionId,
 	LessThanOrEqualToExpressionId,
+	MetaVarExpressionId,
 	NegateExpressionId,
 	NotEqualExpressionId,
 	OperatorCallExpressionId,
@@ -548,6 +565,13 @@ struct VarExpression
 	Expression expr;
 
 	Var var;
+};
+
+struct MetaVarExpression
+{
+	Expression expr;
+
+	MetaVar var;
 };
 
 struct LessThanExpression
@@ -1623,6 +1647,42 @@ func PushVar(VarStack *var_stack, Var var)
 	var_stack->size++;
 }
 
+MetaVar *
+func GetMetaVar(MetaVarStack *stack, Token name)
+{
+	Assert(name.id == NameTokenId);
+	MetaVar *result = 0;
+	for(int i = 0; i < stack->size; i++)
+	{
+		MetaVar *var = &stack->vars[i];
+		if(TokensEqual(var->name, name))
+		{
+			result = var;
+			break;
+		}
+	}
+	return result;
+}
+
+bool
+func MetaVarExists(MetaVarStack *stack, Token name)
+{
+	MetaVar *var = GetMetaVar(stack, name);
+	bool exists = (var != 0);
+	return exists;
+}
+
+void
+func PushMetaVar(MetaVarStack *stack, MetaVar var)
+{
+	Assert(var.name.id == NameTokenId);
+	Assert(var.type != 0);
+	Assert(!MetaVarExists(stack, var.name));
+	Assert(stack->size < MetaVarStackMaxSize);
+	stack->vars[stack->size] = var;
+	stack->size++;
+}
+
 #define StructStackMaxSize 64
 struct StructStack
 {
@@ -1712,6 +1772,7 @@ struct ParseInput
 	MemArena *arena;
 	Token last_token;
 	VarStack var_stack;
+	MetaVarStack meta_var_stack;
 	StructStack struct_stack;
 	FuncStack func_stack;
 	OperatorStack operator_stack;
@@ -1754,6 +1815,7 @@ func ReadCodeLines(ParseInput *input)
 struct StackState
 {
 	int var_stack_size;
+	int meta_var_stack_size;
 	int struct_stack_size;
 	int func_stack_size;
 	int operator_stack_size;
@@ -1766,6 +1828,7 @@ func GetStackState(ParseInput *input)
 {
 	StackState state = {};
 	state.var_stack_size = input->var_stack.size;
+	state.meta_var_stack_size = input->meta_var_stack.size;
 	state.struct_stack_size = input->struct_stack.size;
 	state.func_stack_size = input->func_stack.size;
 	state.operator_stack_size = input->operator_stack.size;
@@ -1778,6 +1841,7 @@ void
 func SetStackState(ParseInput *input, StackState stack_state)
 {
 	input->var_stack.size = stack_state.var_stack_size;
+	input->meta_var_stack.size = stack_state.meta_var_stack_size;
 	input->struct_stack.size = stack_state.struct_stack_size;
 	input->func_stack.size = stack_state.func_stack_size;
 	input->operator_stack.size = stack_state.operator_stack_size;
@@ -2397,6 +2461,21 @@ func PeekTwoTokens(ParseInput *input, TokenId type1, TokenId type2)
 	Token token2 = ReadToken(input);
 
 	result = (token1.id == type1 && token2.id == type2);
+	*input->pos = start_pos;
+	return result;
+}
+
+bool
+func PeekThreeTokens(ParseInput *input, TokenId type1, TokenId type2, TokenId type3)
+{
+	bool result = false;
+
+	CodePosition start_pos = *input->pos;
+	Token token1 = ReadToken(input);
+	Token token2 = ReadToken(input);
+	Token token3 = ReadToken(input);
+
+	result = (token1.id == type1 && token2.id == type2 && token3.id == type3);
 	*input->pos = start_pos;
 	return result;
 }
@@ -3037,6 +3116,19 @@ func PushVarExpression(MemArena *arena, Var var)
 	result->expr.id = VarExpressionId;
 	result->expr.is_const = false;
 	result->expr.has_final_type = var.has_final_type;
+	result->expr.type = var.type;
+	result->var = var;
+	Assert(result != 0);
+	return result;
+}
+
+MetaVarExpression *
+func PushMetaVarExpression(MemArena *arena, MetaVar var)
+{
+	MetaVarExpression *result = ArenaPushType(arena, MetaVarExpression);
+	result->expr.id = MetaVarExpressionId;
+	result->expr.is_const = var.expression->is_const;
+	result->expr.has_final_type = var.expression->has_final_type;
 	result->expr.type = var.type;
 	result->var = var;
 	Assert(result != 0);
@@ -3725,6 +3817,12 @@ func ReadNumberLevelExpression(ParseInput *input)
 			Assert(var != 0);
 			expr = (Expression *)PushVarExpression(input->arena, *var);
 		}
+		else if(MetaVarExists(&input->meta_var_stack, input->last_token))
+		{
+			MetaVar *var = GetMetaVar(&input->meta_var_stack, input->last_token);
+			Assert(var != 0);
+			expr = (Expression *)PushMetaVarExpression(input->arena, *var);
+		}
 		else if(EnumMemberExists(&input->enum_stack, input->last_token))
 		{
 			EnumMember member = GetEnumMember(&input->enum_stack, input->last_token);
@@ -4335,6 +4433,7 @@ enum InstructionId
 	BlockInstructionId,
 	BreakInstructionId,
 	ContinueInstructionId,
+	CreateMetaVariableInstructionId,
 	CreateVariableInstructionId,
 	DeclInstructionId,
 	DecrementInstructionId,
@@ -4407,6 +4506,15 @@ struct CreateVariableInstruction
 	Token var_name;
 	VarType *type;
 	Expression *init;
+};
+
+struct CreateMetaVariableInstruction
+{
+	Instruction instr;
+	
+	Token var_name;
+	VarType *type;
+	Expression *expression;
 };
 
 struct IncrementInstruction
@@ -5331,6 +5439,43 @@ func ReadInstruction(ParseInput *input)
 		var.create_instruction = create_var;
 		PushVar(&input->var_stack, var);
 	}
+	else if(PeekThreeTokens(input, PoundTokenId, NameTokenId, ColonEqualsTokenId))
+	{
+		Assert(ReadTokenType(input, PoundTokenId));
+		Token var_name = ReadToken(input);
+		Assert(var_name.id == NameTokenId);
+		Assert(ReadTokenType(input, ColonEqualsTokenId));
+		if(MetaVarExists(&input->meta_var_stack, var_name))
+		{
+			SetError(input, "Meta variable already exists.");
+		}
+		
+		Expression *expression = ReadExpression(input);
+		if(!expression)
+		{
+			SetError(input, "Expected expression after ':='");
+		}
+		if(!expression->type)
+		{
+			SetError(input, "Expected expression for meta variable");
+		}
+		
+		CreateMetaVariableInstruction *create_meta_var = ArenaPushType(input->arena, CreateMetaVariableInstruction);
+		create_meta_var->instr.next = 0;
+		create_meta_var->instr.id = CreateMetaVariableInstructionId;
+		create_meta_var->var_name = var_name;
+		create_meta_var->expression = expression;
+		create_meta_var->type = expression->type;
+		instruction = (Instruction *)create_meta_var;
+		Assert(!MetaVarExists(&input->meta_var_stack, var_name));
+		
+		MetaVar var = {};
+		var.name = var_name;
+		var.type = expression->type;
+		var.expression = expression;
+		var.create_instruction = create_meta_var;
+		PushMetaVar(&input->meta_var_stack, var);
+	}
 	else
 	{
 		Expression *expression = ReadExpression(input);
@@ -6144,6 +6289,12 @@ func WriteExpression(Output *output, Expression *expression)
 			WriteVar(output, var->var);
 			break;
 		}
+		case MetaVarExpressionId:
+		{
+			MetaVarExpression *var = (MetaVarExpression *)expression;
+			WriteExpression(output, var->var.expression);
+			break;
+		}
 		case EqualExpressionId:
 		{
 			EqualExpression *equal = (EqualExpression *)expression;
@@ -6513,6 +6664,10 @@ func WriteInstruction(Output *output, Instruction *instruction)
 			}
 			break;
 		}
+		case CreateMetaVariableInstructionId:
+		{
+			break;
+		}
 		case IncrementInstructionId:
 		{
 			IncrementInstruction *increment = (IncrementInstruction *)instruction;
@@ -6670,6 +6825,7 @@ func IsPreprocessorInstruction(Instruction *instruction)
 	bool result = false;
 	switch(instruction->id)
 	{
+		case CreateMetaVariableInstructionId:
 		case UseInstructionId:
 		{
 			result = true;
@@ -6983,8 +7139,12 @@ CreateStaticArena(global_arena, 64 * 1024 * 1024);
 int 
 func main()
 {
+	char *m64_file_name = "Meta.m64";
+	char *cpp_file_name = "Meta.hpp";
+	printf("Compiling [%s] to c++ [%s]...\n", m64_file_name, cpp_file_name);
+
 	FILE *m64_file = 0;
-	fopen_s(&m64_file, "Test.m64", "r");
+	fopen_s(&m64_file, m64_file_name, "r");
 	Assert(m64_file != 0);
 
 	int code_index = 0;
@@ -7009,7 +7169,7 @@ func main()
 	Assert(code_index < MaxCodeSize - 1);
 
 	FILE *cpp_file = 0;
-	fopen_s(&cpp_file, "Test.hpp", "w");
+	fopen_s(&cpp_file, cpp_file_name, "w");
 	Assert(cpp_file != 0);
 
 	CodePosition pos = {};
@@ -7023,6 +7183,9 @@ func main()
 
 	input.var_stack.vars = ArenaPushArray(arena, VarStackMaxSize, Var);
 	input.var_stack.size = 0;
+
+	input.meta_var_stack.vars = ArenaPushArray(arena, MetaVarStackMaxSize, MetaVar);
+	input.meta_var_stack.size = 0;
 
 	input.struct_stack.structs = ArenaPushArray(arena, StructStackMaxSize, Struct*);
 	input.struct_stack.size = 0;
@@ -7057,6 +7220,10 @@ func main()
 	}
 
 	fclose(cpp_file);
+
+	printf("Press Enter...\n");
+	char c;
+	scanf_s("%c", &c, 1);
 
 	return 0;
 }
