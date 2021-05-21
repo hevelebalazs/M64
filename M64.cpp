@@ -193,7 +193,7 @@ struct tdef Struct
 };
 
 struct decl Expression;
-// TODO: use [size1, ..., sizen] for multi-dimensional arrays
+// *TODO: use [size1, ..., sizen] for multi-dimensional arrays
 struct tdef ArrayType
 {
 	VarType type;
@@ -3065,7 +3065,6 @@ func ExpressionHasAddress(Expression *expression)
 			case DereferenceExpressionId:
 			case ArrayIndexExpressionId:
 			case StructVarExpressionId:
-			case StructDefVarExpressionId:
 			{
 				has_address = true;
 				break;
@@ -5196,7 +5195,7 @@ func UseExpression(ParseInput *input, Expression *expression)
 	StructMetaVar *meta_var = str->first_meta_var;
 	while(meta_var)
 	{
-		Token name = str_var->name;
+		Token name = meta_var->name;
 		if(VarExists(var_stack, name))
 		{
 			SetError(input, "Variable already exists.");
@@ -5210,6 +5209,7 @@ func UseExpression(ParseInput *input, Expression *expression)
 
 		MetaVar var = {};
 		var.type = meta_var->expression->type;
+		var.name = name;
 		var.expression = meta_var->expression;
 		var.use_from = expression;
 		PushMetaVar(meta_var_stack, var);
@@ -6192,6 +6192,7 @@ func MatchVarWithType(Var *var, VarType *type)
 struct tdef Output
 {
 	MemArena *arena;
+	// TODO: fix this when value comes from a used struct
 	Expression *in_struct;
 	int tabs;
 };

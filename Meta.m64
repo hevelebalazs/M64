@@ -2,17 +2,25 @@ struct Matrix
 {
 	row_n:UInt32;
 	col_n:UInt32;
-	elems:@Int32;
+	//elems:@Int32;
 
 	#elem_n := row_n * col_n;
+	elems:[10][10]Int32;
 }
 
 func GetMatrixSum(matrix:@Matrix):UInt32
 {
+	use matrix;
+
+	n := matrix.elem_n;
+
 	sum := 0;
-	for i := 0 to < matrix.elem_n
+	for row := 0 to < row_n
 	{
-		sum += (matrix.elems + i)@;
+		for col := 0 to < col_n
+		{
+			sum += elems[row][col];
+		}
 	}
 	return sum;
 }
