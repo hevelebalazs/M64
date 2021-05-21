@@ -3065,14 +3065,15 @@ func ExpressionHasAddress(Expression *expression)
 			case DereferenceExpressionId:
 			case ArrayIndexExpressionId:
 			case StructVarExpressionId:
+			case StructDefVarExpressionId:
 			{
 				has_address = true;
 				break;
 			}
 			case StructMetaVarExpressionId:
 			{
-				// TODO: fix case when it actually has address
-				has_address = false;
+				StructMetaVarExpression *expr = (StructMetaVarExpression *)expression;
+				has_address = ExpressionHasAddress(expr->meta_expression);
 				break;
 			}
 			case TernaryOperatorExpressionId:
