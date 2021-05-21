@@ -159,6 +159,8 @@ struct tdef BaseType
 	BaseVarTypeId base_id;
 };
 
+// TODO: either add an optional array type to pointer type, or create a pointer array type
+//			to handle stuff like @[size_1,size_2] separately from simple pointer/array
 struct tdef PointerType
 {
 	VarType type;
@@ -197,8 +199,6 @@ struct tdef ArrayType
 	VarType type;
 
 	Expression *size;
-	// TODO: remove this, allow non-const size expression as long as array is passed through pointer
-	Token meta_size_var_name;
 	VarType *element_type;
 };
 
@@ -2630,14 +2630,13 @@ func PushEnumType(MemArena *arena, Enum *e)
 }
 
 static ArrayType *
-func PushArrayType(MemArena *arena, Expression *size, Token meta_size_var_name, VarType *element_type)
+func PushArrayType(MemArena *arena, Expression *size, VarType *element_type)
 {
 	Assert(size && IsIntegerType(size->type) && size->is_const);
 	Assert(element_type != 0);
 	ArrayType *type = ArenaPushType(arena, ArrayType);
 	type->type.id = ArrayTypeId;
 	type->size = size;
-	type->meta_size_var_name = meta_size_var_name;
 	type->element_type = element_type;
 	return type;
 }
@@ -2662,7 +2661,6 @@ func ReadVarType(ParseInput *input)
 	else if(ReadTokenType(input, OpenBracketsTokenId))
 	{
 		Expression *size_expression = ReadExpression(input);
-		Token meta_size_var_name = {};
 		if(!size_expression)
 		{
 			SetError(input, "Expected array size expression.");
@@ -2678,23 +2676,13 @@ func ReadVarType(ParseInput *input)
 			SetError(input, "Array size expression is not constant.");
 		}
 
-		if(ReadTokenType(input, PoundTokenId))
-		{
-			if(!ReadTokenType(input, NameTokenId))
-			{
-				SetError(input, "Expected meta size variable name.");
-			}
-
-			meta_size_var_name = input->last_token;
-		}
-
 		if(!ReadTokenType(input, CloseBracketsTokenId))
 		{
 			SetError(input, "Expected ']' after array size expression.");
 		}
 
 		VarType *element_type = ReadVarType(input);
-		type = (VarType *)PushArrayType(input->arena, size_expression, meta_size_var_name, element_type);
+		type = (VarType *)PushArrayType(input->arena, size_expression, element_type);
 	}
 	else if(ReadTokenType(input, NameTokenId))
 	{
@@ -2744,30 +2732,6 @@ func ReadVarType(ParseInput *input)
 	}
 
 	return type;
-}
-
-static bool
-func VarTypeHasMetaData(VarType *type)
-{
-	bool has_meta_data = false;
-
-	if(type->id == ArrayTypeId)
-	{
-		ArrayType *array_type = (ArrayType *)type;
-		has_meta_data = (array_type->meta_size_var_name.id != NoTokenId);
-
-		if(!has_meta_data)
-		{
-			has_meta_data = VarTypeHasMetaData(array_type->element_type);
-		}
-	}
-	else if(type->id == PointerTypeId)
-	{
-		PointerType *pointer_type = (PointerType *)type;
-		has_meta_data = VarTypeHasMetaData(pointer_type->pointed_type);
-	}
-
-	return has_meta_data;
 }
 
 /*
@@ -4777,19 +4741,6 @@ func GetArraySizeForIteration(Expression *expression, MemArena* arena)
 	Assert(expression && expression->type->id == ArrayTypeId);
 	ArrayType *array_type = (ArrayType *)expression->type;
 	Expression *size_expression = array_type->size;
-	Token meta_size_var_name = array_type->meta_size_var_name;
-	if(meta_size_var_name.id != NoTokenId)
-	{
-		Assert(array_type->meta_size_var_name.id == NameTokenId);
-		Assert(expression->id == StructVarExpressionId);
-		StructVarExpression *struct_var_expression = (StructVarExpression *)expression;
-		Expression *struct_expression = struct_var_expression->struct_expression;
-		StructVarExpression *meta_size_expression = PushStructVarExpression(arena, struct_expression, 
-																			meta_size_var_name);
-		Assert(IsIntegerType(meta_size_expression->expr.type));
-		size_expression = (Expression *)meta_size_expression;
-	}
-
 	return size_expression;
 }
 
@@ -5337,10 +5288,6 @@ func ReadFuncHeaderWithoutFuncKeyword(ParseInput *input)
 
 		VarType *param_type = ReadVarType(input);
 		Assert(param_type != 0);
-		if(VarTypeHasMetaData(param_type))
-		{
-			SetError(input, "Function parameter type cannot have meta data.");
-		}
 
 		for(int i = 0; i < name_list.size; i++)
 		{
@@ -5377,10 +5324,6 @@ func ReadFuncHeaderWithoutFuncKeyword(ParseInput *input)
 	if(ReadTokenType(input, ColonTokenId))
 	{
 		return_type = ReadVarType(input);
-		if(VarTypeHasMetaData(return_type))
-		{
-			SetError(input, "Function return type cannot have meta data.");
-		}
 	}
 
 	FuncHeader header = {};
@@ -5480,11 +5423,6 @@ func ReadInstruction(ParseInput *input)
 		}
 
 		VarType *var_type = ReadVarType(input);
-		if(VarTypeHasMetaData(var_type))
-		{
-			SetError(input, "Locally defined variable cannot have meta data.");
-		}
-
 		Expression *init = 0;
 
 		if(ReadTokenType(input, OpenParenTokenId))
@@ -6211,38 +6149,6 @@ func ReadStruct(ParseInput *input)
 
 	result->name = name;
 	result->namespace_name = input->namespace_name;
-
-	StructVar *struct_var = result->first_var;
-	while(struct_var)
-	{
-		VarType *type = struct_var->type;
-		while(type->id == PointerTypeId)
-		{
-			type = ((PointerType *)type)->pointed_type;
-		}
-
-		if(type->id == ArrayTypeId)
-		{
-			ArrayType *array_type = (ArrayType *)type;
-			Token meta_size_var_name = array_type->meta_size_var_name;
-			if(meta_size_var_name.id != NoTokenId)
-			{
-				Assert(meta_size_var_name.id == NameTokenId);
-				if(!StructHasVar(result, meta_size_var_name))
-				{
-					SetError(input, "Unknown struct member name for meta size variable.");
-				}
-
-				StructVar *meta_size_var = GetStructVar(result, meta_size_var_name);
-				if(!IsIntegerType(meta_size_var->type))
-				{
-					SetError(input, "Non-integral meta size struct member.");
-				}
-			}
-		}
-
-		struct_var = struct_var->next;
-	}
 
 	input->in_struct_definition = 0;
 
