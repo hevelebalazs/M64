@@ -192,13 +192,15 @@ struct tdef Struct
 	StructMetaVar *first_meta_var;
 };
 
-struct decl Expression;
 // *TODO: use [size1, ..., sizen] for multi-dimensional arrays
+struct decl Expression;
+struct decl ExpressionList;
 struct tdef ArrayType
 {
 	VarType type;
 
-	Expression *size;
+	int dimension;
+	ExpressionList *dimension_size_list;
 	VarType *element_type;
 };
 
@@ -553,6 +555,14 @@ struct tdef Expression
 	bool has_final_type;
 	VarType *type;
 };
+
+struct tdef ExpressionList
+{
+	ExpressionList *next;
+	Expression *expr;
+};
+
+typedef ExpressionList ExpressionListElem;
 
 struct tdef IntegerConstantExpression
 {
@@ -1427,6 +1437,7 @@ struct tdef EnumType
 	Enum *e;
 };
 
+// TODO: handle 0 parameters
 static bool 
 func TypesEqual(VarType *type1, VarType* type2)
 {
@@ -2630,13 +2641,21 @@ func PushEnumType(MemArena *arena, Enum *e)
 }
 
 static ArrayType *
-func PushArrayType(MemArena *arena, Expression *size, VarType *element_type)
+func PushArrayType(MemArena *arena, ExpressionList *dimension_size_list, VarType *element_type)
 {
-	Assert(size && IsIntegerType(size->type) && size->is_const);
-	Assert(element_type != 0);
 	ArrayType *type = ArenaPushType(arena, ArrayType);
 	type->type.id = ArrayTypeId;
-	type->size = size;
+	type->dimension_size_list = dimension_size_list;
+	type->dimension = 0;
+	ExpressionListElem *dimension_size = dimension_size_list;
+	while(dimension_size)
+	{
+		Expression *size = dimension_size->expr;
+		Assert(size && IsIntegerType(size->type) && size->is_const);
+		type->dimension++;
+
+		dimension_size = dimension_size->next;
+	}
 	type->element_type = element_type;
 	return type;
 }
@@ -2660,29 +2679,60 @@ func ReadVarType(ParseInput *input)
 	}
 	else if(ReadTokenType(input, OpenBracketsTokenId))
 	{
-		Expression *size_expression = ReadExpression(input);
-		if(!size_expression)
+		ExpressionListElem *first_dimension_size = 0;
+		ExpressionListElem *last_dimension_size = 0;
+		bool is_first_dimension = true;
+		while(1)
 		{
-			SetError(input, "Expected array size expression.");
-		}
+			if(ReadTokenType(input, CloseBracketsTokenId))
+			{
+				break;
+			}
 
-		if(!IsIntegerType(size_expression->type))
-		{
-			SetError(input, "Array size expression is not integer.");
-		}
+			if(!is_first_dimension)
+			{
+				if(!ReadTokenType(input, CommaTokenId))
+				{
+					SetError(input, "Expected comma between array dimension sizes.");
+				}
+			}
 
-		if(!size_expression->is_const)
-		{
-			SetError(input, "Array size expression is not constant.");
-		}
+			Expression *size_expression = ReadExpression(input);
+			if(!size_expression)
+			{
+				SetError(input, "Expected array size expression.");
+			}
+			if(!IsIntegerType(size_expression->type))
+			{
+				SetError(input, "Array size expression is not integer.");
+			}
+			if(!size_expression->is_const)
+			{
+				SetError(input, "Array size expression is not constant.");
+			}
 
-		if(!ReadTokenType(input, CloseBracketsTokenId))
-		{
-			SetError(input, "Expected ']' after array size expression.");
+			ExpressionListElem *dimension_size = ArenaPushType(input->arena, ExpressionListElem);
+			dimension_size->next = 0;
+			dimension_size->expr = size_expression;
+
+			if(!last_dimension_size)
+			{
+				Assert(!first_dimension_size);
+				first_dimension_size = dimension_size;
+				last_dimension_size = dimension_size;
+			}
+			else
+			{
+				Assert(first_dimension_size);
+				last_dimension_size->next = dimension_size;
+				last_dimension_size = dimension_size;
+			}
+
+			is_first_dimension = false;
 		}
 
 		VarType *element_type = ReadVarType(input);
-		type = (VarType *)PushArrayType(input->arena, size_expression, element_type);
+		type = (VarType *)PushArrayType(input->arena, first_dimension_size, element_type);
 	}
 	else if(ReadTokenType(input, NameTokenId))
 	{
@@ -4113,24 +4163,6 @@ func ReadNumberLevelExpression(ParseInput *input)
 					break;
 				}
 			}
-			else if(expr->type != 0 && expr->type->id == ArrayTypeId)
-			{
-				ArrayType *array = (ArrayType *)expr->type;
-				Assert(array != 0);
-				if(ReadTokenType(input, NameTokenId))
-				{
-					Token member_name = input->last_token;
-					if(TokenEquals(member_name, "size"))
-					{
-						expr = array->size;
-					}
-					else
-					{
-						SetError(input, "Unknown array member.");
-						break;
-					}
-				}
-			}
 			else
 			{
 				SetError(input, "Unexpected '.' (left side is not struct or array).");
@@ -4735,6 +4767,7 @@ static Token global_for_iterator_name =
 	2
 };
 
+#if 0
 static Expression *
 func GetArraySizeForIteration(Expression *expression, MemArena* arena)
 {
@@ -4743,6 +4776,7 @@ func GetArraySizeForIteration(Expression *expression, MemArena* arena)
 	Expression *size_expression = array_type->size;
 	return size_expression;
 }
+#endif
 
 static BreakInstruction *
 func ReadBreakInstruction(ParseInput *input)
@@ -4822,6 +4856,8 @@ func ReadForInstruction(ParseInput *input)
 		SetError(input, "Expected name of 'for' iterator.");
 	}
 
+	// TODO: reenable for loops on arrays
+#if 0
 	if(ReadTokenType(input, OpenBracketsTokenId))
 	{
 		if(!ReadTokenType(input, CloseBracketsTokenId))
@@ -4962,6 +4998,7 @@ func ReadForInstruction(ParseInput *input)
 		block_prefix = (Instruction *)prefix;
 	}
 	else
+#endif
 	{
 		Expression *start_at = ReadExpression(input);
 		if(!start_at)
@@ -6304,9 +6341,17 @@ func WriteType(Output *output, VarType *type)
 			ArrayType *array_type = (ArrayType *)type;
 			WriteString(output, "(");
 			WriteType(output, array_type->element_type);
-			WriteString(output, ")[");
-			WriteExpression(output, array_type->size);
-			WriteString(output, "]");
+			WriteString(output, ")");
+
+			ExpressionListElem *dimension_size = array_type->dimension_size_list;
+			while(dimension_size)
+			{
+				WriteString(output, "[");
+				WriteExpression(output, dimension_size->expr);
+				WriteString(output, "]");
+
+				dimension_size = dimension_size->next;
+			}
 			break;
 		}
 		case EnumTypeId:
@@ -6765,9 +6810,15 @@ func WriteTypeAndVar(Output *output, VarType *type, Token var_name)
 	while(type->id == ArrayTypeId)
 	{
 		ArrayType *array_type = (ArrayType *)type;
-		WriteString(output, "[");
-		WriteExpression(output, array_type->size);
-		WriteString(output, "]");
+		ExpressionListElem *dimension_size = array_type->dimension_size_list;
+		while(dimension_size)
+		{
+			WriteString(output, "[");
+			WriteExpression(output, dimension_size->expr);
+			WriteString(output, "]");
+
+			dimension_size = dimension_size->next;
+		}
 		type = array_type->element_type;
 	}
 }
