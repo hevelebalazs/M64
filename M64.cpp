@@ -6118,7 +6118,6 @@ func ReadStruct(ParseInput *input)
 				SetError(input, "Expected ':=' after struct meta variable name.");
 			}
 
-			// TODO: ReadStructExpression or something that allows reading variables from the struct
 			Expression *expression = ReadExpression(input);
 			if(!expression)
 			{
@@ -6480,140 +6479,139 @@ func WriteExpression(Output *output, Expression *expression)
 {
 	switch(expression->id)
 	{
-		// TODO: rename typed expression to expr everywhere!
 		case IntegerConstantExpressionId:
 		{
-			IntegerConstantExpression *integer_constant = (IntegerConstantExpression *)expression;
-			WriteIntegerConstantAsType(output, integer_constant->token, expression->type);
+			IntegerConstantExpression *expr = (IntegerConstantExpression *)expression;
+			WriteIntegerConstantAsType(output, expr->token, expression->type);
 			break;
 		}
 		case CharacterConstantExpressionId:
 		{
-			CharacterConstantExpression *character_constant = (CharacterConstantExpression *)expression;
-			WriteToken(output, character_constant->token);
+			CharacterConstantExpression *expr = (CharacterConstantExpression *)expression;
+			WriteToken(output, expr->token);
 			break;
 		}
 		case RealConstantExpressionId:
 		{
-			RealConstantExpression *real_constant = (RealConstantExpression *)expression;
-			WriteToken(output, real_constant->token);
+			RealConstantExpression *expr = (RealConstantExpression *)expression;
+			WriteToken(output, expr->token);
 			WriteString(output, "f");
 			break;
 		}
 		case VarExpressionId:
 		{
-			VarExpression *var = (VarExpression *)expression;
-			WriteVar(output, var->var);
+			VarExpression *expr = (VarExpression *)expression;
+			WriteVar(output, expr->var);
 			break;
 		}
 		case MetaVarExpressionId:
 		{
-			MetaVarExpression *var = (MetaVarExpression *)expression;
-			WriteExpression(output, var->var.expression);
+			MetaVarExpression *expr = (MetaVarExpression *)expression;
+			WriteExpression(output, expr->var.expression);
 			break;
 		}
 		case EqualExpressionId:
 		{
-			EqualExpression *equal = (EqualExpression *)expression;
-			WriteExpression(output, equal->left);
+			EqualExpression *expr = (EqualExpression *)expression;
+			WriteExpression(output, expr->left);
 			WriteString(output, " == ");
-			WriteExpression(output, equal->right);
+			WriteExpression(output, expr->right);
 			break;
 		}
 		case NotEqualExpressionId:
 		{
-			NotEqualExpression *not_equal = (NotEqualExpression *)expression;
-			WriteExpression(output, not_equal->left);
+			NotEqualExpression *expr = (NotEqualExpression *)expression;
+			WriteExpression(output, expr->left);
 			WriteString(output, " != ");
-			WriteExpression(output, not_equal->right);
+			WriteExpression(output, expr->right);
 			break;
 		}
 		case LessThanExpressionId:
 		{
-			LessThanExpression *less_than = (LessThanExpression *)expression;
-			WriteExpression(output, less_than->left);
+			LessThanExpression *expr = (LessThanExpression *)expression;
+			WriteExpression(output, expr->left);
 			WriteString(output, " < ");
-			WriteExpression(output, less_than->right);
+			WriteExpression(output, expr->right);
 			break;
 		}
 		case GreaterThanExpressionId:
 		{
-			GreaterThanExpression *greater_than = (GreaterThanExpression *)expression;
-			WriteExpression(output, greater_than->left);
+			GreaterThanExpression *expr = (GreaterThanExpression *)expression;
+			WriteExpression(output, expr->left);
 			WriteString(output, " > ");
-			WriteExpression(output, greater_than->right);
+			WriteExpression(output, expr->right);
 			break;
 		}
 		case GreaterThanOrEqualToExpressionId:
 		{
-			GreaterThanOrEqualToExpression *greater_than_or_equal_to = (GreaterThanOrEqualToExpression *)expression;
-			WriteExpression(output, greater_than_or_equal_to->left);
+			GreaterThanOrEqualToExpression *expr = (GreaterThanOrEqualToExpression *)expression;
+			WriteExpression(output, expr->left);
 			WriteString(output, " >= ");
-			WriteExpression(output, greater_than_or_equal_to->right);
+			WriteExpression(output, expr->right);
 			break;
 		}
 		case LessThanOrEqualToExpressionId:
 		{
-			LessThanOrEqualToExpression *less_than_or_equal_to = (LessThanOrEqualToExpression *)expression;
-			WriteExpression(output, less_than_or_equal_to->left);
+			LessThanOrEqualToExpression *expr = (LessThanOrEqualToExpression *)expression;
+			WriteExpression(output, expr->left);
 			WriteString(output, " <= ");
-			WriteExpression(output, less_than_or_equal_to->right);
+			WriteExpression(output, expr->right);
 			break;
 		}
 		case DereferenceExpressionId:
 		{
-			DereferenceExpression *dereference = (DereferenceExpression *)expression;
+			DereferenceExpression *expr = (DereferenceExpression *)expression;
 			WriteString(output, "(*");
-			WriteExpression(output, dereference->base);
+			WriteExpression(output, expr->base);
 			WriteString(output, ")");
 			break;
 		}
 		case AddExpressionId:
 		{
-			AddExpression *add = (AddExpression *)expression;
-			WriteExpression(output, add->left);
+			AddExpression *expr = (AddExpression *)expression;
+			WriteExpression(output, expr->left);
 			WriteString(output, " + ");
-			WriteExpression(output, add->right);
+			WriteExpression(output, expr->right);
 			break;
 		}
 		case SubtractExpressionId:
 		{
-			SubtractExpression *subtract = (SubtractExpression *)expression;
-			WriteExpression(output, subtract->left);
+			SubtractExpression *expr = (SubtractExpression *)expression;
+			WriteExpression(output, expr->left);
 			WriteString(output, " - ");
-			WriteExpression(output, subtract->right);
+			WriteExpression(output, expr->right);
 			break;
 		}
 		case ProductExpressionId:
 		{
-			ProductExpression *product = (ProductExpression *)expression;
-			WriteExpression(output, product->left);
+			ProductExpression *expr = (ProductExpression *)expression;
+			WriteExpression(output, expr->left);
 			WriteString(output, " * ");
-			WriteExpression(output, product->right);
+			WriteExpression(output, expr->right);
 			break;
 		}
 		case DivideExpressionId:
 		{
-			DivideExpression *divide = (DivideExpression *)expression;
-			WriteExpression(output, divide->left);
+			DivideExpression *expr = (DivideExpression *)expression;
+			WriteExpression(output, expr->left);
 			WriteString(output, " / ");
-			WriteExpression(output, divide->right);
+			WriteExpression(output, expr->right);
 			break;
 		}
 		case ParenExpressionId:
 		{
-			ParenExpression *paren = (ParenExpression *)expression;
+			ParenExpression *expr = (ParenExpression *)expression;
 			WriteString(output, "(");
-			WriteExpression(output, paren->in);
+			WriteExpression(output, expr->in);
 			WriteString(output, ")");
 			break;
 		}
 		case StructVarExpressionId:
 		{
-			StructVarExpression *struct_var = (StructVarExpression *)expression;
-			WriteExpression(output, struct_var->struct_expression);
+			StructVarExpression *expr = (StructVarExpression *)expression;
+			WriteExpression(output, expr->struct_expression);
 			WriteString(output, ".");
-			WriteToken(output, struct_var->var_name);
+			WriteToken(output, expr->var_name);
 			break;
 		}
 		case StructDefVarExpressionId:
@@ -6633,23 +6631,23 @@ func WriteExpression(Output *output, Expression *expression)
 		}
 		case StructMetaVarExpressionId:
 		{
-			StructMetaVarExpression *var = (StructMetaVarExpression *)expression;
+			StructMetaVarExpression *expr = (StructMetaVarExpression *)expression;
 
 			Assert(output->in_struct == 0);
-			output->in_struct = var->struct_expression;
+			output->in_struct = expr->struct_expression;
 
-			WriteExpression(output, var->meta_expression);
+			WriteExpression(output, expr->meta_expression);
 
-			Assert(output->in_struct == var->struct_expression);
+			Assert(output->in_struct == expr->struct_expression);
 			output->in_struct = 0;
 			break;
 		}
 		case FuncCallExpressionId:
 		{
-			FuncCallExpression *func_call = (FuncCallExpression *)expression;
-			Func *f = func_call->f;
+			FuncCallExpression *expr = (FuncCallExpression *)expression;
+			Func *f = expr->f;
 			FuncParam *param = f->header.first_param;
-			FuncCallParam *call_param = func_call->first_param;
+			FuncCallParam *call_param = expr->first_param;
 
 			WriteToken(output, f->header.namespace_name);
 			WriteToken(output, f->header.name);
@@ -6679,74 +6677,74 @@ func WriteExpression(Output *output, Expression *expression)
 		}
 		case CastExpressionId:
 		{
-			CastExpression *cast = (CastExpression *)expression;
+			CastExpression *expr = (CastExpression *)expression;
 			WriteString(output, "(");
-			WriteType(output, cast->type);
+			WriteType(output, expr->type);
 			WriteString(output, ")(");
-			WriteExpression(output, cast->expression);
+			WriteExpression(output, expr->expression);
 			WriteString(output, ")");
 			break;
 		}
 		case LeftShiftExpressionId:
 		{
-			LeftShiftExpression *left_shift = (LeftShiftExpression *)expression;
-			WriteExpression(output, left_shift->left);
+			LeftShiftExpression *expr = (LeftShiftExpression *)expression;
+			WriteExpression(output, expr->left);
 			WriteString(output, " << ");
-			WriteExpression(output, left_shift->right);
+			WriteExpression(output, expr->right);
 			break;
 		}
 		case RightShiftExpressionId:
 		{
-			RightShiftExpression *right_shift = (RightShiftExpression *)expression;
-			WriteExpression(output, right_shift->left);
+			RightShiftExpression *expr = (RightShiftExpression *)expression;
+			WriteExpression(output, expr->left);
 			WriteString(output, " >> ");
-			WriteExpression(output, right_shift->right);
+			WriteExpression(output, expr->right);
 			break;
 		}
 		case TernaryOperatorExpressionId:
 		{
-			TernaryOperatorExpression *ternary_op = (TernaryOperatorExpression *)expression;
-			WriteExpression(output, ternary_op->condition);
+			TernaryOperatorExpression *expr = (TernaryOperatorExpression *)expression;
+			WriteExpression(output, expr->condition);
 			WriteString(output, " ? ");
-			WriteExpression(output, ternary_op->left);
+			WriteExpression(output, expr->left);
 			WriteString(output, " : ");
-			WriteExpression(output, ternary_op->right);
+			WriteExpression(output, expr->right);
 			break;
 		}
 		case AddressExpressionId:
 		{
-			AddressExpression *address = (AddressExpression *)expression;
+			AddressExpression *expr = (AddressExpression *)expression;
 			WriteString(output, "&");
-			WriteExpression(output, address->addressed);
+			WriteExpression(output, expr->addressed);
 			break;
 		}
 		case OrExpressionId:
 		{
-			OrExpression *or = (OrExpression *)expression;
-			WriteExpression(output, or->left);
+			OrExpression *expr = (OrExpression *)expression;
+			WriteExpression(output, expr->left);
 			WriteString(output, " || ");
-			WriteExpression(output, or->right);
+			WriteExpression(output, expr->right);
 			break;
 		}
 		case AndExpressionId:
 		{
-			AndExpression *and = (AndExpression *)expression;
-			WriteExpression(output, and->left);
+			AndExpression *expr = (AndExpression *)expression;
+			WriteExpression(output, expr->left);
 			WriteString(output, " && ");
-			WriteExpression(output, and->right);
+			WriteExpression(output, expr->right);
 			break;
 		}
 		case InvertExpressionId:
 		{
-			InvertExpression *invert = (InvertExpression *)expression;
+			InvertExpression *expr = (InvertExpression *)expression;
 			WriteString(output, "-");
-			WriteExpression(output, invert->inverted);
+			WriteExpression(output, expr->inverted);
 			break;
 		}
 		case BoolConstantExpressionId:
 		{
-			BoolConstantExpression *bool_constant = (BoolConstantExpression *)expression;
-			if(bool_constant->value)
+			BoolConstantExpression *expr = (BoolConstantExpression *)expression;
+			if(expr->value)
 			{
 				WriteString(output, "true");
 			}
@@ -6758,56 +6756,56 @@ func WriteExpression(Output *output, Expression *expression)
 		}
 		case NegateExpressionId:
 		{
-			NegateExpression *negate = (NegateExpression *)expression;
+			NegateExpression *expr = (NegateExpression *)expression;
 			WriteString(output, "!");
-			WriteExpression(output, negate->negated);
+			WriteExpression(output, expr->negated);
 			break;
 		}
 		case BitAndExpressionId:
 		{
-			BitAndExpression *bit_and = (BitAndExpression *)expression;
-			WriteExpression(output, bit_and->left);
+			BitAndExpression *expr = (BitAndExpression *)expression;
+			WriteExpression(output, expr->left);
 			WriteString(output, " & ");
-			WriteExpression(output, bit_and->right);
+			WriteExpression(output, expr->right);
 			break;
 		}
 		case ArrayIndexExpressionId:
 		{
-			ArrayIndexExpression *array_index = (ArrayIndexExpression *)expression;
+			ArrayIndexExpression *expr = (ArrayIndexExpression *)expression;
 			WriteString(output, "(");
-			WriteExpression(output, array_index->array);
+			WriteExpression(output, expr->array);
 			WriteString(output, ")[");
-			WriteExpression(output, array_index->index);
+			WriteExpression(output, expr->index);
 			WriteString(output, "]");
 			break;
 		}
 		case OperatorCallExpressionId:
 		{
-			OperatorCallExpression *operator_call = (OperatorCallExpression *)expression;
-			char *name = GetOperatorFuncName(operator_call->op->token.id);
+			OperatorCallExpression *expr = (OperatorCallExpression *)expression;
+			char *name = GetOperatorFuncName(expr->op->token.id);
 			WriteString(output, name);
 			WriteString(output, "(");
-			WriteExpression(output, operator_call->left);
+			WriteExpression(output, expr->left);
 			WriteString(output, ", ");
-			WriteExpression(output, operator_call->right);
+			WriteExpression(output, expr->right);
 			WriteString(output, ")");
 			break;
 		}
 		case EnumMemberExpressionId:
 		{
-			EnumMemberExpression *enum_member = (EnumMemberExpression *)expression;
-			EnumMember member = enum_member->member;
+			EnumMemberExpression *expr = (EnumMemberExpression *)expression;
+			EnumMember member = expr->member;
 			Token name = member.e->tokens[member.index];
 			WriteToken(output, name);
 			break;
 		}
 		case ConstructorCallExpressionId:
 		{
-			ConstructorCallExpression *cc = (ConstructorCallExpression *)expression;
-			FuncCallParam *call_param = cc->first_param;
+			ConstructorCallExpression *expr = (ConstructorCallExpression *)expression;
+			FuncCallParam *call_param = expr->first_param;
 
-			WriteToken(output, cc->ctor->header.namespace_name);
-			WriteToken(output, cc->ctor->header.name);
+			WriteToken(output, expr->ctor->header.namespace_name);
+			WriteToken(output, expr->ctor->header.name);
 			WriteString(output, "(");
 
 			bool is_first_param = true;
@@ -6829,8 +6827,8 @@ func WriteExpression(Output *output, Expression *expression)
 		}
 		case StringConstantExpressionId:
 		{
-			StringConstantExpression *string_constant = (StringConstantExpression *)expression;
-			WriteToken(output, string_constant->token);
+			StringConstantExpression *expr = (StringConstantExpression *)expression;
+			WriteToken(output, expr->token);
 			break;
 		}
 		default:

@@ -16,20 +16,3 @@ func GetMatrixSum(matrix:@Matrix):UInt32
 	}
 	return sum;
 }
-
-func MetaTest()
-{
-	#N := 2*25;
-	a:[N][N]Int32;
-	
-	for i := [] in a
-	{
-		for j := [] in a[i]
-		{
-			#aij := a[i][j];
-			aij = 10;
-		}
-	}
-
-	aij := 10;
-}
