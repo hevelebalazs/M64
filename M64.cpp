@@ -173,20 +173,31 @@ struct tdef StructVar
 	Token name;
 };
 
+struct decl Expression;
+struct tdef StructMetaVar
+{
+	StructMetaVar *next;
+	Expression *expression;
+	Token name;
+};
+
 struct tdef Struct
 {
 	Token name;
 
 	Token namespace_name;
 	StructVar *first_var;
+	StructMetaVar *first_meta_var;
 };
 
 struct decl Expression;
+// TODO: use [size1, ..., sizen] for multi-dimensional arrays
 struct tdef ArrayType
 {
 	VarType type;
 
 	Expression *size;
+	// TODO: remove this, allow non-const size expression as long as array is passed through pointer
 	Token meta_size_var_name;
 	VarType *element_type;
 };
@@ -481,6 +492,7 @@ struct tdef MetaVar
 	VarType *type;
 	Token name;
 	Expression *expression;
+	Expression *use_from;
 	CreateMetaVariableInstruction *create_instruction;
 };
 
@@ -527,6 +539,7 @@ enum tdef ExpressionId
 	RightShiftExpressionId,
 	StringConstantExpressionId,
 	StructVarExpressionId,
+	StructMetaVarExpressionId,
 	SubtractExpressionId,
 	TernaryOperatorExpressionId,
 	VarExpressionId,
@@ -682,6 +695,15 @@ struct tdef StructVarExpression
 	Expression expr;
 
 	Expression *struct_expression;
+	Token var_name;
+};
+
+struct tdef StructMetaVarExpression
+{
+	Expression expr;
+
+	Expression *struct_expression;
+	Expression *meta_expression;
 	Token var_name;
 };
 
@@ -999,7 +1021,7 @@ typeenum VarType
 	No,
 	BaseType(base_id:BaseVarTypeId),
 	PointerType(pointed_type:@VarType),
-	StructType(name:Token, first_var:@StructVar),
+	StructType(name:Token, first_var:@StructVar, first_meta_var:@StructMetaVar),
 	ArrayType(size:Token, element_type:@VarType)
 }
 
@@ -1158,6 +1180,7 @@ typeenum Expression
 	Add(expr1, expr2 :@Expression),
 	Subtract(expr1, expr2: @Expression),
 	StructVar(str: @Expression, name:Token),
+	StructMetaVar(str: @Expression, name:Token),
 	FuncCall(name:Token, param_list:@FuncCallParamList),
 	Cast(type:@VarType, expr:@Expression),
 	LeftShift(expr1, expr2 :@Expression),
@@ -1351,6 +1374,32 @@ static bool
 func StructHasVar(Struct *str, Token name)
 {
 	StructVar *var = GetStructVar(str, name);
+	bool has_var = (var != 0);
+	return has_var;
+}
+
+static StructMetaVar *
+func GetStructMetaVar(Struct *str, Token name)
+{
+	StructMetaVar *result = 0;
+	StructMetaVar *var = str->first_meta_var;
+	while(var)
+	{
+		if(TokensEqual(var->name, name))
+		{
+			result = var;
+			break;
+		}
+
+		var = var->next;
+	}
+	return result;
+}
+
+static bool 
+func StructHasMetaVar(Struct *str, Token name)
+{
+	StructMetaVar *var = GetStructMetaVar(str, name);
 	bool has_var = (var != 0);
 	return has_var;
 }
@@ -3046,6 +3095,12 @@ func ExpressionHasAddress(Expression *expression)
 				has_address = true;
 				break;
 			}
+			case StructMetaVarExpressionId:
+			{
+				// TODO: fix case when it actually has address
+				has_address = false;
+				break;
+			}
 			case TernaryOperatorExpressionId:
 			{
 				TernaryOperatorExpression *ternary_op = (TernaryOperatorExpression *)expression;
@@ -3400,6 +3455,28 @@ func PushStructVarExpression(MemArena *arena, Expression *struct_expression, Tok
 	result->var_name = var_name;
 	return result;
 }
+
+static StructMetaVarExpression *
+func PushStructMetaVarExpression(MemArena *arena, Expression *struct_expression, Token var_name)
+{
+	Assert(struct_expression != 0);
+	Assert(struct_expression->type != 0 && struct_expression->type->id == StructTypeId);
+	StructType *struct_type = (StructType *)struct_expression->type;
+	Struct *str = struct_type->str;
+	StructMetaVar *var = GetStructMetaVar(str, var_name);
+	Assert(var != 0);
+
+	StructMetaVarExpression *result = ArenaPushType(arena, StructMetaVarExpression);
+	Assert(result != 0);
+	result->expr.id = StructMetaVarExpressionId;
+	result->expr.is_const = var->expression->is_const;
+	result->expr.type = var->expression->type;
+	result->expr.has_final_type = var->expression->has_final_type;
+	result->struct_expression = struct_expression;
+	result->meta_expression = var->expression;
+	result->var_name = var_name;
+	return result;
+};
 
 static FuncCallExpression * 
 func PushFuncCallExpression(MemArena *arena, Func *f, FuncCallParam *first_param)
@@ -4014,6 +4091,10 @@ func ReadNumberLevelExpression(ParseInput *input)
 					if(StructHasVar(str, var_name))
 					{
 						expr = (Expression *)PushStructVarExpression(input->arena, expr, var_name);
+					}
+					else if(StructHasMetaVar(str, var_name))
+					{
+						expr = (Expression *)PushStructMetaVarExpression(input->arena, expr, var_name);
 					}
 					else
 					{
@@ -5091,6 +5172,7 @@ func UseExpression(ParseInput *input, Expression *expression)
 	}
 	
 	VarStack *var_stack = &input->var_stack;
+	MetaVarStack *meta_var_stack = &input->meta_var_stack;
 
 	Assert(expression->type->id == StructTypeId);
 	Struct *str = ((StructType *)expression->type)->str;
@@ -5103,6 +5185,11 @@ func UseExpression(ParseInput *input, Expression *expression)
 			SetError(input, "Variable already exists.");
 			break;
 		}
+		if(MetaVarExists(meta_var_stack, name))
+		{
+			SetError(input, "A meta variable with this name already exists.");
+			break;
+		}
 		
 		Var var = {};
 		var.name = str_var->name;
@@ -5111,6 +5198,30 @@ func UseExpression(ParseInput *input, Expression *expression)
 		PushVar(var_stack, var);
 
 		str_var = str_var->next;
+	}
+
+	StructMetaVar *meta_var = str->first_meta_var;
+	while(meta_var)
+	{
+		Token name = str_var->name;
+		if(VarExists(var_stack, name))
+		{
+			SetError(input, "Variable already exists.");
+			break;
+		}
+		if(MetaVarExists(meta_var_stack, name))
+		{
+			SetError(input, "A meta variable with this name already exists.");
+			break;
+		}
+
+		MetaVar var = {};
+		var.type = meta_var->expression->type;
+		var.expression = meta_var->expression;
+		var.use_from = expression;
+		PushMetaVar(meta_var_stack, var);
+
+		meta_var = meta_var->next;
 	}
 }
 
@@ -5942,6 +6053,8 @@ func ReadStruct(ParseInput *input)
 
 	StructVar *first_var = 0;
 	StructVar *last_var = 0;
+	StructMetaVar *first_meta_var = 0;
+	StructMetaVar *last_meta_var = 0;
 	while(true)
 	{
 		if(ReadTokenType(input, CloseBracesTokenId))
@@ -5949,61 +6062,107 @@ func ReadStruct(ParseInput *input)
 			break;
 		}
 
-		NameList var_name_list = ReadNameList(input);
-		if(var_name_list.size == 0)
+		if(ReadTokenType(input, PoundTokenId))
 		{
-			SetError(input, "Expected struct member name or '}'.");
-		}
-
-		if(!ReadTokenType(input, ColonTokenId))
-		{
-			if(var_name_list.size == 1)
+			if(!ReadTokenType(input, NameTokenId))
 			{
-				SetError(input, "Expected ':' after struct member name.");
+				SetError(input, "Expected struct meta variable name.");
 			}
-			else
-			{
-				SetError(input, "Expected ':' after struct member names.");
-			}
-			break;
-		}
+			Token name = input->last_token;
 
-		VarType *var_type = ReadVarType(input);
-		if(!var_type)
-		{
-			if(var_name_list.size == 1)
+			if(!ReadTokenType(input, ColonEqualsTokenId))
 			{
-				SetError(input, "Expected var type for struct member.");
+				SetError(input, "Expected ':=' after struct meta variable name.");
 			}
-			else
+
+			// TODO: ReadStructExpression or something that allows reading variables from the struct
+			Expression *expression = ReadExpression(input);
+			if(!expression)
 			{
-				SetError(input, "Expected var type for struct members.");
+				SetError(input, "Expected expression for struct meta variable.");
 			}
-		}
 
-		if(!ReadTokenType(input, SemiColonTokenId))
-		{
-			SetError(input, "Expected ';' after struct member definition.");
-		}
+			if(!ReadTokenType(input, SemiColonTokenId))
+			{
+				SetError(input, "Expected ';' after struct meta variable definition.");
+			}
 
-		for(int i = 0; i < var_name_list.size; i++)
-		{
-			StructVar *var = ArenaPushType(input->arena, StructVar);
+			StructMetaVar *var = ArenaPushType(input->arena, StructMetaVar);
 			var->next = 0;
-			var->name = var_name_list.names[i];
-			var->type = var_type;
+			var->name = name;
+			var->expression = expression;
 
-			if(!last_var)
+			if(!last_meta_var)
 			{
-				Assert(!first_var);
-				first_var = var;
-				last_var = var;
+				Assert(!first_meta_var);
+				first_meta_var = var;
+				last_meta_var = var;
 			}
 			else
 			{
-				Assert(first_var);
-				last_var->next = var;
-				last_var = var;
+				Assert(first_meta_var);
+				last_meta_var->next = var;
+				last_meta_var = var;
+			}
+		}
+		else
+		{
+			NameList var_name_list = ReadNameList(input);
+			if(var_name_list.size == 0)
+			{
+				SetError(input, "Expected struct member name or '}'.");
+			}
+
+			if(!ReadTokenType(input, ColonTokenId))
+			{
+				if(var_name_list.size == 1)
+				{
+					SetError(input, "Expected ':' after struct member name.");
+				}
+				else
+				{
+					SetError(input, "Expected ':' after struct member names.");
+				}
+				break;
+			}
+
+			VarType *var_type = ReadVarType(input);
+			if(!var_type)
+			{
+				if(var_name_list.size == 1)
+				{
+					SetError(input, "Expected var type for struct member.");
+				}
+				else
+				{
+					SetError(input, "Expected var type for struct members.");
+				}
+			}
+
+			if(!ReadTokenType(input, SemiColonTokenId))
+			{
+				SetError(input, "Expected ';' after struct member definition.");
+			}
+
+			for(int i = 0; i < var_name_list.size; i++)
+			{
+				StructVar *var = ArenaPushType(input->arena, StructVar);
+				var->next = 0;
+				var->name = var_name_list.names[i];
+				var->type = var_type;
+
+				if(!last_var)
+				{
+					Assert(!first_var);
+					first_var = var;
+					last_var = var;
+				}
+				else
+				{
+					Assert(first_var);
+					last_var->next = var;
+					last_var = var;
+				}
 			}
 		}
 	}
@@ -6410,6 +6569,12 @@ func WriteExpression(Output *output, Expression *expression)
 			WriteExpression(output, struct_var->struct_expression);
 			WriteString(output, ".");
 			WriteToken(output, struct_var->var_name);
+			break;
+		}
+		case StructMetaVarExpressionId:
+		{
+			StructMetaVarExpression *var = (StructMetaVarExpression *)expression;
+			WriteExpression(output, var->meta_expression);
 			break;
 		}
 		case FuncCallExpressionId:
