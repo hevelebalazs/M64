@@ -4,15 +4,16 @@
 #define Assert(condition) {if(!(condition)) DebugBreak();}
 #define func
 #define decl
+#define tdef
 
-struct MemArena
+struct tdef MemArena
 {
 	char *memory;
 	int max_size;
 	int used_size;
 };
 
-MemArena 
+static MemArena 
 func CreateArena(char *memory, int size)
 {
 	Assert(memory);
@@ -26,7 +27,7 @@ func CreateArena(char *memory, int size)
 
 #define CreateStaticArena(name, size) char name##_buffer[size]; MemArena name = CreateArena(name##_buffer, size);
 
-char * 
+static char * 
 func ArenaPush(MemArena *arena, int size)
 {
 	char *memory = arena->memory + arena->used_size;
@@ -41,14 +42,14 @@ func ArenaPush(MemArena *arena, int size)
 #define MaxCodeSize 1024 * 1024
 static char global_code_buffer[MaxCodeSize];
 
-struct CodePosition
+struct tdef CodePosition
 {
 	char *at;
 	int row;
 	int col;
 };
 
-enum TokenId
+enum tdef TokenId
 {
 	NoTokenId,
 	EndOfFileTokenId,
@@ -116,7 +117,7 @@ enum TokenId
 	StringConstantTokenId
 };
 
-struct Token
+struct tdef Token
 {
 	TokenId id;
 	char *text;
@@ -125,7 +126,7 @@ struct Token
 	int col;
 };
 
-enum VarTypeId
+enum tdef VarTypeId
 {
 	NoTypeId,
 	BaseTypeId,
@@ -135,12 +136,12 @@ enum VarTypeId
 	EnumTypeId
 };
 
-struct VarType
+struct tdef VarType
 {
 	VarTypeId id;
 };
 
-enum BaseVarTypeId
+enum tdef BaseVarTypeId
 {
 	NoBaseTypeId,
 	Int8BaseTypeId,
@@ -151,28 +152,28 @@ enum BaseVarTypeId
 	Bool32BaseTypeId
 };
 
-struct BaseType
+struct tdef BaseType
 {
 	VarType type;
 
 	BaseVarTypeId base_id;
 };
 
-struct PointerType
+struct tdef PointerType
 {
 	VarType type;
 
 	VarType *pointed_type;
 };
 
-struct StructVar
+struct tdef StructVar
 {
 	StructVar *next;
 	VarType *type;
 	Token name;
 };
 
-struct Struct
+struct tdef Struct
 {
 	Token name;
 
@@ -180,8 +181,8 @@ struct Struct
 	StructVar *first_var;
 };
 
-struct Expression;
-struct ArrayType
+struct decl Expression;
+struct tdef ArrayType
 {
 	VarType type;
 
@@ -190,16 +191,16 @@ struct ArrayType
 	VarType *element_type;
 };
 
-struct FuncParam
+struct tdef FuncParam
 {
 	FuncParam *next;
 	Token name;
 	VarType *type;
 };
 
-struct BlockInstruction;
+struct decl BlockInstruction;
 
-struct FuncHeader
+struct tdef FuncHeader
 {
 	Token name;
 
@@ -208,20 +209,20 @@ struct FuncHeader
 	VarType *return_type;
 };
 
-struct Func
+struct tdef Func
 {
 	FuncHeader header;
 	BlockInstruction* body;
 };
 
 #define FuncStackMaxSize 256
-struct FuncStack
+struct tdef FuncStack
 {
 	Func **funcs;
 	int size;
 };
 
-struct Operator
+struct tdef Operator
 {
 	Token left_name;
 	Token right_name;
@@ -233,13 +234,13 @@ struct Operator
 };
 
 #define OperatorStackMaxSize 64
-struct OperatorStack
+struct tdef OperatorStack
 {
 	Operator **operators;
 	int size;
 };
 
-struct Constructor
+struct tdef Constructor
 {
 	VarType *type;
 	FuncHeader header;
@@ -247,13 +248,13 @@ struct Constructor
 };
 
 #define ConstructorStackMaxSize 64
-struct ConstructorStack
+struct tdef ConstructorStack
 {
 	Constructor **constructors;
 	int size;
 };
 
-struct Enum
+struct tdef Enum
 {
 	Token name;
 
@@ -262,22 +263,22 @@ struct Enum
 	int size;
 };
 
-struct EnumMember
+struct tdef EnumMember
 {
 	Enum *e;
 	int index;
 };
 
 #define EnumStackMaxSize 64
-struct EnumStack
+struct tdef EnumStack
 {
 	Enum **enums;
 	int size;
 };
 
-decl bool TypesEqual(VarType *type1, VarType* type2);
+static bool decl TypesEqual(VarType *type1, VarType* type2);
 
-bool
+static bool
 func IsValidOperatorTokenId(TokenId token_id)
 {
 	bool is_valid = false;
@@ -295,7 +296,7 @@ func IsValidOperatorTokenId(TokenId token_id)
 	return is_valid;
 }
 
-Operator *
+static Operator *
 func GetOperator(OperatorStack *stack, VarType *left_type, VarType *right_type, TokenId token_id)
 {
 	Assert(left_type != 0 && right_type != 0);
@@ -314,7 +315,7 @@ func GetOperator(OperatorStack *stack, VarType *left_type, VarType *right_type, 
 	return result;
 }
 
-void
+static void
 func PushOperator(OperatorStack *stack, Operator *op)
 {
 	Assert(stack->size < OperatorStackMaxSize);
@@ -322,7 +323,7 @@ func PushOperator(OperatorStack *stack, Operator *op)
 	stack->size++;
 }
 
-void
+static void
 func PushConstructor(ConstructorStack *stack, Constructor *ctor)
 {
 	Assert(stack->size < ConstructorStackMaxSize);
@@ -330,7 +331,7 @@ func PushConstructor(ConstructorStack *stack, Constructor *ctor)
 	stack->size++;
 }
 
-bool 
+static bool 
 func TokensEqual(Token token1, Token token2)
 {
 	bool equal = false;
@@ -382,7 +383,7 @@ func GetEnumMember(stack:@EnumStack, name:Token):EnumMember
 }
 */
 
-EnumMember
+static EnumMember
 func GetEnumMember(EnumStack *stack, Token name)
 {
 	EnumMember result = {};
@@ -408,7 +409,7 @@ func GetEnumMember(EnumStack *stack, Token name)
 	return result;
 }
 
-bool
+static bool
 func EnumMemberExists(EnumStack *stack, Token name)
 {
 	EnumMember member = GetEnumMember(stack, name);
@@ -416,7 +417,7 @@ func EnumMemberExists(EnumStack *stack, Token name)
 	return exists;
 }
 
-Enum *
+static Enum *
 func GetEnum(EnumStack *stack, Token name)
 {
 	Enum *result = 0;
@@ -432,7 +433,7 @@ func GetEnum(EnumStack *stack, Token name)
 	return result;
 }
 
-void
+static void
 func PushEnum(EnumStack *stack, Enum *e)
 {
 	Assert(stack->size < EnumStackMaxSize);
@@ -455,9 +456,9 @@ struct VarStack
 }
 */
 
-struct Expression;
-struct CreateVariableInstruction;
-struct Var
+struct decl Expression;
+struct decl CreateVariableInstruction;
+struct tdef Var
 {
 	VarType *type;
 	Token name;
@@ -468,14 +469,14 @@ struct Var
 };
 
 #define VarStackMaxSize 64
-struct VarStack
+struct tdef VarStack
 {
 	Var *vars;
 	int size;
 };
 
-struct CreateMetaVariableInstruction;
-struct MetaVar
+struct decl CreateMetaVariableInstruction;
+struct tdef MetaVar
 {
 	VarType *type;
 	Token name;
@@ -484,13 +485,13 @@ struct MetaVar
 };
 
 #define MetaVarStackMaxSize 64
-struct MetaVarStack
+struct tdef MetaVarStack
 {
 	MetaVar *vars;
 	int size;
 };
 
-enum ExpressionId
+enum tdef ExpressionId
 {
 	NoExpressionId,
 
@@ -531,7 +532,7 @@ enum ExpressionId
 	VarExpressionId,
 };
 
-struct Expression
+struct tdef Expression
 {
 	ExpressionId id;
 	bool is_const;
@@ -539,42 +540,42 @@ struct Expression
 	VarType *type;
 };
 
-struct IntegerConstantExpression
+struct tdef IntegerConstantExpression
 {
 	Expression expr;
 
 	Token token;
 };
 
-struct CharacterConstantExpression
+struct tdef CharacterConstantExpression
 {
 	Expression expr;
 
 	Token token;
 };
 
-struct RealConstantExpression
+struct tdef RealConstantExpression
 {
 	Expression expr;
 
 	Token token;
 };
 
-struct VarExpression
+struct tdef VarExpression
 {
 	Expression expr;
 
 	Var var;
 };
 
-struct MetaVarExpression
+struct tdef MetaVarExpression
 {
 	Expression expr;
 
 	MetaVar var;
 };
 
-struct LessThanExpression
+struct tdef LessThanExpression
 {
 	Expression expr;
 
@@ -582,7 +583,7 @@ struct LessThanExpression
 	Expression *right;
 };
 
-struct GreaterThanExpression
+struct tdef GreaterThanExpression
 {
 	Expression expr;
 
@@ -590,7 +591,7 @@ struct GreaterThanExpression
 	Expression *right;
 };
 
-struct EqualExpression
+struct tdef EqualExpression
 {
 	Expression expr;
 
@@ -598,7 +599,7 @@ struct EqualExpression
 	Expression *right;
 };
 
-struct NotEqualExpression
+struct tdef NotEqualExpression
 {
 	Expression expr;
 
@@ -606,7 +607,7 @@ struct NotEqualExpression
 	Expression *right;
 };
 
-struct GreaterThanOrEqualToExpression
+struct tdef GreaterThanOrEqualToExpression
 {
 	Expression expr;
 
@@ -614,7 +615,7 @@ struct GreaterThanOrEqualToExpression
 	Expression *right;
 };
 
-struct LessThanOrEqualToExpression
+struct tdef LessThanOrEqualToExpression
 {
 	Expression expr;
 
@@ -622,14 +623,14 @@ struct LessThanOrEqualToExpression
 	Expression *right;
 };
 
-struct DereferenceExpression
+struct tdef DereferenceExpression
 {
 	Expression expr;
 
 	Expression *base;
 };
 
-struct ArrayIndexExpression
+struct tdef ArrayIndexExpression
 {
 	Expression expr;
 
@@ -637,7 +638,7 @@ struct ArrayIndexExpression
 	Expression *index;
 };
 
-struct ProductExpression
+struct tdef ProductExpression
 {
 	Expression expr;
 
@@ -645,7 +646,7 @@ struct ProductExpression
 	Expression *right;
 };
 
-struct DivideExpression
+struct tdef DivideExpression
 {
 	Expression expr;
 
@@ -653,14 +654,14 @@ struct DivideExpression
 	Expression *right;
 };
 
-struct ParenExpression
+struct tdef ParenExpression
 {
 	Expression expr;
 
 	Expression *in;
 };
 
-struct AddExpression
+struct tdef AddExpression
 {
 	Expression expr;
 
@@ -668,7 +669,7 @@ struct AddExpression
 	Expression *right;
 };
 
-struct SubtractExpression
+struct tdef SubtractExpression
 {
 	Expression expr;
 
@@ -676,7 +677,7 @@ struct SubtractExpression
 	Expression *right;
 };
 
-struct StructVarExpression
+struct tdef StructVarExpression
 {
 	Expression expr;
 
@@ -684,14 +685,14 @@ struct StructVarExpression
 	Token var_name;
 };
 
-struct FuncCallParam
+struct tdef FuncCallParam
 {
 	FuncCallParam *next;
 
 	Expression *expression;
 };
 
-struct FuncCallExpression
+struct tdef FuncCallExpression
 {
 	Expression expr;
 
@@ -699,7 +700,7 @@ struct FuncCallExpression
 	FuncCallParam *first_param;
 };
 
-struct CastExpression
+struct tdef CastExpression
 {
 	Expression expr;
 
@@ -707,7 +708,7 @@ struct CastExpression
 	Expression *expression;
 };
 
-struct LeftShiftExpression
+struct tdef LeftShiftExpression
 {
 	Expression expr;
 
@@ -715,7 +716,7 @@ struct LeftShiftExpression
 	Expression *right;
 };
 
-struct RightShiftExpression
+struct tdef RightShiftExpression
 {
 	Expression expr;
 
@@ -723,7 +724,7 @@ struct RightShiftExpression
 	Expression *right;
 };
 
-struct TernaryOperatorExpression
+struct tdef TernaryOperatorExpression
 {
 	Expression expr;
 
@@ -732,14 +733,14 @@ struct TernaryOperatorExpression
 	Expression *right;
 };
 
-struct AddressExpression
+struct tdef AddressExpression
 {
 	Expression expr;
 
 	Expression *addressed;
 };
 
-struct OrExpression
+struct tdef OrExpression
 {
 	Expression expr;
 
@@ -747,7 +748,7 @@ struct OrExpression
 	Expression *right;
 };
 
-struct AndExpression
+struct tdef AndExpression
 {
 	Expression expr;
 
@@ -755,28 +756,28 @@ struct AndExpression
 	Expression *right;
 };
 
-struct InvertExpression
+struct tdef InvertExpression
 {
 	Expression expr;
 
 	Expression *inverted;
 };
 
-struct BoolConstantExpression
+struct tdef BoolConstantExpression
 {
 	Expression expr;
 
 	bool value;
 };
 
-struct NegateExpression
+struct tdef NegateExpression
 {
 	Expression expr;
 
 	Expression *negated;
 };
 
-struct BitAndExpression
+struct tdef BitAndExpression
 {
 	Expression expr;
 
@@ -784,7 +785,7 @@ struct BitAndExpression
 	Expression *right;
 };
 
-struct OperatorCallExpression
+struct tdef OperatorCallExpression
 {
 	Expression expr;
 
@@ -793,14 +794,14 @@ struct OperatorCallExpression
 	Expression *right;
 };
 
-struct EnumMemberExpression
+struct tdef EnumMemberExpression
 {
 	Expression expr;
 
 	EnumMember member;
 };
 
-struct ConstructorCallExpression
+struct tdef ConstructorCallExpression
 {
 	Expression expr;
 
@@ -808,26 +809,26 @@ struct ConstructorCallExpression
 	FuncCallParam *first_param;
 };
 
-struct StringConstantExpression
+struct tdef StringConstantExpression
 {
 	Expression expr;
 
 	Token token;
 };
 
-bool 
+static bool 
 func IsNewLine(char c)
 {
 	return (c == '\n' || c == '\r');
 }
 
-bool 
+static bool 
 func IsWhiteSpace(char c)
 {
 	return (c == ' ' || c == '\t' || IsNewLine(c));
 }
 
-bool
+static bool
 func IsAlpha(char c)
 {
 	if(c >= 'a' && c <= 'z')
@@ -848,31 +849,31 @@ func IsAlpha(char c)
 	}
 }
 
-bool 
+static bool 
 func IsDigit(char c)
 {
 	return (c >= '0' && c <= '9');
 }
 
-bool 
+static bool 
 func IsBinaryDigit(char c)
 {
 	return (c == '0' || c == '1');
 }
 
-bool 
+static bool 
 func IsOctalDigit(char c)
 {
 	return (c >= '0' && c <= '7');
 }
 
-bool 
+static bool 
 func IsHexadecimalDigit(char c)
 {
 	return (IsDigit(c) || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'));
 }
 
-bool 
+static bool 
 func TokenEquals(Token token, char *text)
 {
 	bool length_matches = true;
@@ -902,7 +903,7 @@ func TokenEquals(Token token, char *text)
 	return (text_matches && length_matches);
 }
 
-void 
+static void 
 func SkipWhiteSpaceAndComments(CodePosition *pos)
 {
 	while(pos->at[0])
@@ -1328,7 +1329,7 @@ func WriteExpression(output:@Output, expression:@Expression)
 }
 */
 
-StructVar *
+static StructVar *
 func GetStructVar(Struct *str, Token name)
 {
 	StructVar *result = 0;
@@ -1346,7 +1347,7 @@ func GetStructVar(Struct *str, Token name)
 	return result;
 }
 
-bool 
+static bool 
 func StructHasVar(Struct *str, Token name)
 {
 	StructVar *var = GetStructVar(str, name);
@@ -1354,21 +1355,21 @@ func StructHasVar(Struct *str, Token name)
 	return has_var;
 }
 
-struct StructType
+struct tdef StructType
 {
 	VarType type;
 
 	Struct *str;
 };
 
-struct EnumType
+struct tdef EnumType
 {
 	VarType type;
 
 	Enum *e;
 };
 
-bool 
+static bool 
 func TypesEqual(VarType *type1, VarType* type2)
 {
 	bool equal = false;
@@ -1414,7 +1415,7 @@ func TypesEqual(VarType *type1, VarType* type2)
 	return equal;
 }
 
-bool 
+static bool 
 func IsNumericalType(VarType *type)
 {
 	bool is_numerical = false;
@@ -1442,7 +1443,7 @@ func IsNumericalType(VarType *type)
 	return is_numerical;
 }
 
-int 
+static int 
 func GetNumericalTypePriority(VarType *type)
 {
 	int priority = 0;
@@ -1498,7 +1499,7 @@ func IsPointerType(Type:@VarType) :Bool32
 }
 */
 
-bool 
+static bool 
 func IsPointerType(VarType *type)
 {
 	bool is_pointer = false;
@@ -1533,7 +1534,7 @@ func IsIntegerType(type:@VarType) :Bool32
 }
 */
 
-bool
+static bool
 func IsBoolType(VarType *type)
 {
 	bool is_bool = false;
@@ -1549,7 +1550,7 @@ func IsBoolType(VarType *type)
 	return is_bool;
 }
 
-bool
+static bool
 func IsRealType(VarType *type)
 {
 	bool is_real_type = false;
@@ -1565,7 +1566,7 @@ func IsRealType(VarType *type)
 	return is_real_type;
 }
 
-bool
+static bool
 func IsIntegerType(VarType *type)
 {
 	bool is_integer = false;
@@ -1611,7 +1612,7 @@ func GetVar(var_stack:@VarStack, name:Token) :@Var
 }
 */
 
-Var *
+static Var *
 func GetVar(VarStack *var_stack, Token name)
 {
 	Assert(name.id == NameTokenId);
@@ -1628,7 +1629,7 @@ func GetVar(VarStack *var_stack, Token name)
 	return result;
 }
 
-bool
+static bool
 func VarExists(VarStack *var_stack, Token name)
 {
 	Var *var = GetVar(var_stack, name);
@@ -1636,7 +1637,7 @@ func VarExists(VarStack *var_stack, Token name)
 	return exists;
 }
 
-void
+static void
 func PushVar(VarStack *var_stack, Var var)
 {
 	Assert(var.name.id == NameTokenId);
@@ -1647,7 +1648,7 @@ func PushVar(VarStack *var_stack, Var var)
 	var_stack->size++;
 }
 
-MetaVar *
+static MetaVar *
 func GetMetaVar(MetaVarStack *stack, Token name)
 {
 	Assert(name.id == NameTokenId);
@@ -1664,7 +1665,7 @@ func GetMetaVar(MetaVarStack *stack, Token name)
 	return result;
 }
 
-bool
+static bool
 func MetaVarExists(MetaVarStack *stack, Token name)
 {
 	MetaVar *var = GetMetaVar(stack, name);
@@ -1672,7 +1673,7 @@ func MetaVarExists(MetaVarStack *stack, Token name)
 	return exists;
 }
 
-void
+static void
 func PushMetaVar(MetaVarStack *stack, MetaVar var)
 {
 	Assert(var.name.id == NameTokenId);
@@ -1684,13 +1685,13 @@ func PushMetaVar(MetaVarStack *stack, MetaVar var)
 }
 
 #define StructStackMaxSize 64
-struct StructStack
+struct tdef StructStack
 {
 	Struct **structs;
 	int size;
 };
 
-Struct *
+static Struct *
 func GetStruct(StructStack *stack, Token name)
 {
 	Struct *result = 0;
@@ -1706,7 +1707,7 @@ func GetStruct(StructStack *stack, Token name)
 	return result;
 }
 
-bool
+static bool
 func HasStruct(StructStack *stack, Token name)
 {
 	Struct *str = GetStruct(stack, name);
@@ -1714,7 +1715,7 @@ func HasStruct(StructStack *stack, Token name)
 	return has_struct;
 }
 
-void
+static void
 func PushStruct(StructStack *stack, Struct *str)
 {
 	Assert(!HasStruct(stack, str->name));
@@ -1723,7 +1724,7 @@ func PushStruct(StructStack *stack, Struct *str)
 	stack->size++;
 }
 
-Func *
+static Func *
 func GetFunc(FuncStack *stack, Token name)
 {
 	Func *result = 0;
@@ -1739,7 +1740,7 @@ func GetFunc(FuncStack *stack, Token name)
 	return result;
 }
 
-bool
+static bool
 func FuncExists(FuncStack *stack, Token name)
 {
 	Func *f = GetFunc(stack, name);
@@ -1747,7 +1748,7 @@ func FuncExists(FuncStack *stack, Token name)
 	return exists;
 }
 
-void
+static void
 func PushFunc(FuncStack *stack, Func *f)
 {
 	Assert(f != 0);
@@ -1758,13 +1759,13 @@ func PushFunc(FuncStack *stack, Func *f)
 	stack->size++;
 }
 
-struct CodeLine
+struct tdef CodeLine
 {
 	char *string;
 	int length;
 };
 
-struct ParseInput
+struct tdef ParseInput
 {
 	int line_n;
 	CodeLine *lines;
@@ -1782,7 +1783,7 @@ struct ParseInput
 	Token namespace_name;
 };
 
-void
+static void
 func ReadCodeLines(ParseInput *input)
 {
 	input->lines = ArenaPushArray(input->arena, 2, CodeLine);
@@ -1812,7 +1813,7 @@ func ReadCodeLines(ParseInput *input)
 	}
 }
 
-struct StackState
+struct tdef StackState
 {
 	int var_stack_size;
 	int meta_var_stack_size;
@@ -1823,7 +1824,7 @@ struct StackState
 	int constructor_stack_size;
 };
 
-StackState
+static StackState
 func GetStackState(ParseInput *input)
 {
 	StackState state = {};
@@ -1837,7 +1838,7 @@ func GetStackState(ParseInput *input)
 	return state;
 }
 
-void
+static void
 func SetStackState(ParseInput *input, StackState stack_state)
 {
 	input->var_stack.size = stack_state.var_stack_size;
@@ -1851,13 +1852,13 @@ func SetStackState(ParseInput *input, StackState stack_state)
 
 #include <stdio.h>
 
-void
+static void
 func PrintLine(CodeLine line)
 {
 	printf("%.*s\n", line.length, line.string);
 }
 
-void
+static void
 func PrintTokenInLine(ParseInput *input, Token token)
 {
 	CodeLine line = input->lines[token.row];
@@ -1880,7 +1881,7 @@ func PrintTokenInLine(ParseInput *input, Token token)
 	printf("\n");
 }
 
-void
+static void
 func SetErrorToken(ParseInput *input, char *description, Token token)
 {
 	printf("%s\n", description);
@@ -1891,13 +1892,13 @@ func SetErrorToken(ParseInput *input, char *description, Token token)
 	DebugBreak();
 }
 
-void
+static void
 func SetError(ParseInput *input, char *description)
 {
 	SetErrorToken(input, description, input->last_token);
 }
 
-Token
+static Token
 func CreatePrefixToken(ParseInput *input, char *prefix, Token token)
 {
 	MemArena *arena = input->token_name_arena;
@@ -1923,7 +1924,7 @@ func CreatePrefixToken(ParseInput *input, char *prefix, Token token)
 	return result;
 }
 
-Token
+static Token
 func ReadToken(ParseInput *input)
 {
 	CodePosition *pos = input->pos;
@@ -2438,7 +2439,7 @@ func ReadToken(ParseInput *input)
 	return token;
 }
 
-bool
+static bool
 func PeekToken(ParseInput *input, TokenId type)
 {
 	bool result = false;
@@ -2451,7 +2452,7 @@ func PeekToken(ParseInput *input, TokenId type)
 	return result;
 }
 
-bool
+static bool
 func PeekTwoTokens(ParseInput *input, TokenId type1, TokenId type2)
 {
 	bool result = false;
@@ -2465,7 +2466,7 @@ func PeekTwoTokens(ParseInput *input, TokenId type1, TokenId type2)
 	return result;
 }
 
-bool
+static bool
 func PeekThreeTokens(ParseInput *input, TokenId type1, TokenId type2, TokenId type3)
 {
 	bool result = false;
@@ -2480,7 +2481,7 @@ func PeekThreeTokens(ParseInput *input, TokenId type1, TokenId type2, TokenId ty
 	return result;
 }
 
-bool 
+static bool 
 func ReadTokenType(ParseInput *input, TokenId type)
 {
 	bool result = false;
@@ -2498,14 +2499,14 @@ func ReadTokenType(ParseInput *input, TokenId type)
 	return result;
 }
 
-struct NameList
+struct tdef NameList
 {
 	int size;
 	Token *names;
 };
 
-func
-NameList ReadNameList(ParseInput *input)
+static NameList
+func ReadNameList(ParseInput *input)
 {
 	NameList list = {};
 	list.size = 0;
@@ -2532,7 +2533,7 @@ NameList ReadNameList(ParseInput *input)
 	return list;
 }
 
-BaseType *
+static BaseType *
 func PushBaseType(MemArena *arena, BaseVarTypeId base_id)
 {
 	BaseType *base_type = ArenaPushType(arena, BaseType);
@@ -2541,7 +2542,7 @@ func PushBaseType(MemArena *arena, BaseVarTypeId base_id)
 	return base_type;
 }
 
-PointerType *
+static PointerType *
 func PushPointerType(MemArena *arena, VarType *pointed_type)
 {
 	Assert(pointed_type != 0);
@@ -2551,7 +2552,7 @@ func PushPointerType(MemArena *arena, VarType *pointed_type)
 	return type;
 }
 
-StructType *
+static StructType *
 func PushStructType(MemArena *arena, Struct* str)
 {
 	StructType *type = ArenaPushType(arena, StructType);
@@ -2560,7 +2561,7 @@ func PushStructType(MemArena *arena, Struct* str)
 	return type;
 }
 
-EnumType *
+static EnumType *
 func PushEnumType(MemArena *arena, Enum *e)
 {
 	EnumType *type = ArenaPushType(arena, EnumType);	
@@ -2569,7 +2570,7 @@ func PushEnumType(MemArena *arena, Enum *e)
 	return type;
 }
 
-ArrayType *
+static ArrayType *
 func PushArrayType(MemArena *arena, Expression *size, Token meta_size_var_name, VarType *element_type)
 {
 	Assert(size && IsIntegerType(size->type) && size->is_const);
@@ -2582,9 +2583,9 @@ func PushArrayType(MemArena *arena, Expression *size, Token meta_size_var_name, 
 	return type;
 }
 
-Expression *ReadExpression(ParseInput *input);
+static Expression * decl ReadExpression(ParseInput *input);
 
-VarType *
+static VarType *
 func ReadVarType(ParseInput *input)
 {
 	VarType *type = 0;
@@ -2732,7 +2733,7 @@ func GetMatchingType(type1, type2 :@VarType) :@VarType
 }
 */
 
-VarType *
+static VarType *
 func GetMatchingType(VarType *type1, VarType *type2)
 {
 	VarType *type = 0;
@@ -2753,9 +2754,9 @@ func GetMatchingType(VarType *type1, VarType *type2)
 	return type;
 }
 
-bool MatchVarWithType(Var *var, VarType *type);
+static bool decl MatchVarWithType(Var *var, VarType *type);
 
-bool
+static bool
 func CanMatchExpressionWithType(Expression *expr, VarType *type)
 {
 	bool can_match = false;
@@ -2775,7 +2776,7 @@ func CanMatchExpressionWithType(Expression *expr, VarType *type)
 	return can_match;
 }
 
-bool 
+static bool 
 func MatchExpressionWithType(ParseInput *input, Expression *expr, VarType *type)
 {
 	bool can_match = false;
@@ -2933,7 +2934,7 @@ func MatchExpressionWithType(ParseInput *input, Expression *expr, VarType *type)
 	return can_match;
 }
 
-bool
+static bool
 func MatchExpressionTypes(ParseInput *input, Expression *expr1, Expression *expr2)
 {
 	Assert(expr1 != 0 && expr2 != 0);
@@ -2944,7 +2945,7 @@ func MatchExpressionTypes(ParseInput *input, Expression *expr1, Expression *expr
 	return match;
 }
 
-bool
+static bool
 func MatchExpressionTypesToAdd(ParseInput *input, Expression *expr1, Expression *expr2)
 {
 	Assert(expr1 != 0 && expr2 != 0);
@@ -2961,7 +2962,7 @@ func MatchExpressionTypesToAdd(ParseInput *input, Expression *expr1, Expression 
 	return can_match;
 }
 
-bool 
+static bool 
 func IsConditionExpression(Expression *expression)
 {
 	bool is_condition = false;
@@ -2975,7 +2976,7 @@ func IsConditionExpression(Expression *expression)
 	return is_condition;
 }
 
-VarType * 
+static VarType * 
 func GetType(ParseInput *input, Token name)
 {
 	VarType *type = 0;
@@ -3010,7 +3011,7 @@ func GetType(ParseInput *input, Token name)
 	return type;
 }
 
-bool 
+static bool 
 func TypeExists(ParseInput *input, Token name)
 {
 	VarType *type = GetType(input, name);
@@ -3018,7 +3019,7 @@ func TypeExists(ParseInput *input, Token name)
 	return exists;
 }
 
-bool 
+static bool 
 func CanCastTypeTo(VarType *type_from, VarType *type_to)
 {
 	bool can_cast = false;
@@ -3029,7 +3030,7 @@ func CanCastTypeTo(VarType *type_from, VarType *type_to)
 	return can_cast;
 }
 
-bool 
+static bool 
 func ExpressionHasAddress(Expression *expression)
 {
 	bool has_address = false;
@@ -3060,7 +3061,7 @@ func ExpressionHasAddress(Expression *expression)
 	return has_address;
 }
 
-IntegerConstantExpression *
+static IntegerConstantExpression *
 func PushIntegerConstantExpression(MemArena *arena, Token token)
 {
 	IntegerConstantExpression *result = ArenaPushType(arena, IntegerConstantExpression);
@@ -3083,7 +3084,7 @@ func PushIntegerConstantExpression(MemArena *arena, Token token)
 	return result;
 }
 
-CharacterConstantExpression *
+static CharacterConstantExpression *
 func PushCharacterConstantExpression(MemArena *arena, Token token)
 {
 	CharacterConstantExpression *result = ArenaPushType(arena, CharacterConstantExpression);
@@ -3096,7 +3097,7 @@ func PushCharacterConstantExpression(MemArena *arena, Token token)
 	return result;
 }
 
-RealConstantExpression *
+static RealConstantExpression *
 func PushRealConstantExpression(MemArena *arena, Token token)
 {
 	RealConstantExpression *result = ArenaPushType(arena, RealConstantExpression);
@@ -3109,7 +3110,7 @@ func PushRealConstantExpression(MemArena *arena, Token token)
 	return result;
 }
 
-VarExpression * 
+static VarExpression * 
 func PushVarExpression(MemArena *arena, Var var)
 {
 	VarExpression *result = ArenaPushType(arena, VarExpression);
@@ -3122,7 +3123,7 @@ func PushVarExpression(MemArena *arena, Var var)
 	return result;
 }
 
-MetaVarExpression *
+static MetaVarExpression *
 func PushMetaVarExpression(MemArena *arena, MetaVar var)
 {
 	MetaVarExpression *result = ArenaPushType(arena, MetaVarExpression);
@@ -3135,7 +3136,7 @@ func PushMetaVarExpression(MemArena *arena, MetaVar var)
 	return result;
 }
 
-LessThanExpression * 
+static LessThanExpression * 
 func PushLessThanExpression(MemArena *arena, Expression *left, Expression *right)
 {
 	Assert(left != 0 && right != 0);
@@ -3151,7 +3152,7 @@ func PushLessThanExpression(MemArena *arena, Expression *left, Expression *right
 	return result;
 }
 
-EqualExpression * 
+static EqualExpression * 
 func PushEqualExpression(MemArena *arena, Expression *left, Expression *right)
 {
 	Assert(left != 0 && right != 0);
@@ -3167,7 +3168,7 @@ func PushEqualExpression(MemArena *arena, Expression *left, Expression *right)
 	return result;
 }
 
-NotEqualExpression *
+static NotEqualExpression *
 func PushNotEqualExpression(MemArena *arena, Expression *left, Expression *right)
 {
 	Assert(left != 0 && right != 0);
@@ -3183,7 +3184,7 @@ func PushNotEqualExpression(MemArena *arena, Expression *left, Expression *right
 	return result;
 }
 
-GreaterThanExpression * 
+static GreaterThanExpression * 
 func PushGreaterThanExpression(MemArena *arena, Expression *left, Expression *right)
 {
 	Assert(left != 0 && right != 0);
@@ -3199,7 +3200,7 @@ func PushGreaterThanExpression(MemArena *arena, Expression *left, Expression *ri
 	return result;
 }
 
-GreaterThanOrEqualToExpression * 
+static GreaterThanOrEqualToExpression * 
 func PushGreaterThanOrEqualToExpression(MemArena *arena, Expression *left, Expression *right)
 {
 	Assert(left != 0 && right != 0);
@@ -3215,7 +3216,7 @@ func PushGreaterThanOrEqualToExpression(MemArena *arena, Expression *left, Expre
 	return result;
 }
 
-LessThanOrEqualToExpression * 
+static LessThanOrEqualToExpression * 
 func PushLessThanOrEqualToExpression(MemArena *arena, Expression *left, Expression *right)
 {
 	Assert(left != 0 && right != 0);
@@ -3231,7 +3232,7 @@ func PushLessThanOrEqualToExpression(MemArena *arena, Expression *left, Expressi
 	return result;
 }
 
-DereferenceExpression * 
+static DereferenceExpression * 
 func PushDereferenceExpression(MemArena *arena, Expression *base)
 {
 	Assert(base != 0);
@@ -3247,7 +3248,7 @@ func PushDereferenceExpression(MemArena *arena, Expression *base)
 	return result;
 }
 
-ArrayIndexExpression * 
+static ArrayIndexExpression * 
 func PushArrayIndexExpression(MemArena *arena, Expression *array, Expression *index)
 {
 	Assert(array != 0 && index != 0);
@@ -3265,7 +3266,7 @@ func PushArrayIndexExpression(MemArena *arena, Expression *array, Expression *in
 	return result;
 }
 
-ProductExpression * 
+static ProductExpression * 
 func PushProductExpression(MemArena *arena, Expression *left, Expression *right)
 {
 	Assert(left != 0 && right != 0);
@@ -3283,7 +3284,7 @@ func PushProductExpression(MemArena *arena, Expression *left, Expression *right)
 	return result;
 }
 
-DivideExpression * 
+static DivideExpression * 
 func PushDivideExpression(MemArena *arena, Expression *left, Expression *right)
 {
 	Assert(left != 0 && right != 0);
@@ -3301,7 +3302,7 @@ func PushDivideExpression(MemArena *arena, Expression *left, Expression *right)
 	return result;
 }
 
-ParenExpression * 
+static ParenExpression * 
 func PushParenExpression(MemArena *arena, Expression *in)
 {
 	Assert(in != 0);
@@ -3315,7 +3316,7 @@ func PushParenExpression(MemArena *arena, Expression *in)
 	return result;
 }
 
-AddExpression * 
+static AddExpression * 
 func PushAddExpression(MemArena *arena, Expression *left, Expression *right)
 {
 	Assert(left != 0 && right != 0);
@@ -3342,7 +3343,7 @@ func PushAddExpression(MemArena *arena, Expression *left, Expression *right)
 	return result;
 }
 
-SubtractExpression * 
+static SubtractExpression * 
 func PushSubtractExpression(MemArena *arena, Expression *left, Expression *right)
 {
 	Assert(left != 0 && right != 0);
@@ -3379,7 +3380,7 @@ func PushSubtractExpression(MemArena *arena, Expression *left, Expression *right
 	return result;
 }
 
-StructVarExpression *
+static StructVarExpression *
 func PushStructVarExpression(MemArena *arena, Expression *struct_expression, Token var_name)
 {
 	Assert(struct_expression != 0);
@@ -3400,7 +3401,7 @@ func PushStructVarExpression(MemArena *arena, Expression *struct_expression, Tok
 	return result;
 }
 
-FuncCallExpression * 
+static FuncCallExpression * 
 func PushFuncCallExpression(MemArena *arena, Func *f, FuncCallParam *first_param)
 {
 	Assert(f != 0);
@@ -3415,7 +3416,7 @@ func PushFuncCallExpression(MemArena *arena, Func *f, FuncCallParam *first_param
 	return result;
 }
 
-OperatorCallExpression *
+static OperatorCallExpression *
 func PushOperatorCallExpression(MemArena *arena, Operator *op, Expression *left, Expression *right)
 {
 	Assert(op != 0 && left != 0 && right != 0);
@@ -3432,7 +3433,7 @@ func PushOperatorCallExpression(MemArena *arena, Operator *op, Expression *left,
 	return result;
 }
 
-EnumMemberExpression *
+static EnumMemberExpression *
 func PushEnumMemberExpression(MemArena *arena, EnumMember member)
 {
 	Assert(member.e != 0);
@@ -3446,7 +3447,7 @@ func PushEnumMemberExpression(MemArena *arena, EnumMember member)
 	return result;
 }
 
-CastExpression * 
+static CastExpression * 
 func PushCastExpression(MemArena *arena, VarType *type, Expression *expression)
 {
 	Assert(type != 0 && expression != 0);
@@ -3462,7 +3463,7 @@ func PushCastExpression(MemArena *arena, VarType *type, Expression *expression)
 	return result;
 }
 
-LeftShiftExpression * 
+static LeftShiftExpression * 
 func PushLeftShiftExpression(MemArena *arena, Expression *left, Expression *right)
 {
 	Assert(left != 0 && right != 0);
@@ -3478,7 +3479,7 @@ func PushLeftShiftExpression(MemArena *arena, Expression *left, Expression *righ
 	return result;
 }
 
-RightShiftExpression * 
+static RightShiftExpression * 
 func PushRightShiftExpression(MemArena *arena, Expression *left, Expression *right)
 {
 	Assert(left != 0 && right != 0);
@@ -3495,7 +3496,7 @@ func PushRightShiftExpression(MemArena *arena, Expression *left, Expression *rig
 	return result;
 }
 
-TernaryOperatorExpression *
+static TernaryOperatorExpression *
 func PushTernaryOperatorExpression(MemArena *arena, Expression *condition, Expression *left, Expression *right)
 {
 	Assert(condition != 0 && left != 0 && right != 0);
@@ -3513,7 +3514,7 @@ func PushTernaryOperatorExpression(MemArena *arena, Expression *condition, Expre
 	return result;
 }
 
-AddressExpression * 
+static AddressExpression * 
 func PushAddressExpression(MemArena *arena, Expression *addressed)
 {
 	Assert(addressed != 0);
@@ -3528,7 +3529,7 @@ func PushAddressExpression(MemArena *arena, Expression *addressed)
 	return result;
 }
 
-OrExpression * 
+static OrExpression * 
 func PushOrExpression(MemArena *arena, Expression *left, Expression *right)
 {
 	Assert(left != 0 && right != 0);
@@ -3544,7 +3545,7 @@ func PushOrExpression(MemArena *arena, Expression *left, Expression *right)
 	return result;
 }
 
-AndExpression *
+static AndExpression *
 func PushAndExpression(MemArena *arena, Expression *left, Expression *right)
 {
 	Assert(left != 0 && right != 0);
@@ -3560,7 +3561,7 @@ func PushAndExpression(MemArena *arena, Expression *left, Expression *right)
 	return result;
 }
 
-InvertExpression * 
+static InvertExpression * 
 func PushInvertExpression(MemArena *arena, Expression *inverted)
 {
 	Assert(inverted != 0);
@@ -3575,7 +3576,7 @@ func PushInvertExpression(MemArena *arena, Expression *inverted)
 	return result;
 }
 
-BoolConstantExpression * 
+static BoolConstantExpression * 
 func PushBoolConstantExpression(MemArena *arena, bool value)
 {
 	BoolConstantExpression *result = ArenaPushType(arena, BoolConstantExpression);
@@ -3588,7 +3589,7 @@ func PushBoolConstantExpression(MemArena *arena, bool value)
 	return result;
 }
 
-NegateExpression * 
+static NegateExpression * 
 func PushNegateExpression(MemArena *arena, Expression *negated)
 {
 	Assert(negated != 0);
@@ -3603,7 +3604,7 @@ func PushNegateExpression(MemArena *arena, Expression *negated)
 	return result;
 }
 
-BitAndExpression * 
+static BitAndExpression * 
 func PushBitAndExpression(MemArena *arena, Expression *left, Expression *right)
 {
 	Assert(left != 0 && right != 0);
@@ -3621,7 +3622,7 @@ func PushBitAndExpression(MemArena *arena, Expression *left, Expression *right)
 	return result;
 }
 
-ConstructorCallExpression *
+static ConstructorCallExpression *
 func PushConstructorCallExpression(MemArena *arena, Constructor *ctor, FuncCallParam *first_param)
 {
 	Assert(ctor != 0 && first_param != 0);
@@ -3644,7 +3645,7 @@ func PushConstructorCallExpression(MemArena *arena, Constructor *ctor, FuncCallP
 	return result;
 }
 
-StringConstantExpression *
+static StringConstantExpression *
 func PushStringConstantExpression(MemArena *arena, Token token)
 {
 	StringConstantExpression *result = ArenaPushType(arena, StringConstantExpression);
@@ -3658,9 +3659,9 @@ func PushStringConstantExpression(MemArena *arena, Token token)
 	return result;
 }
 
-Expression *ReadExpression(ParseInput *input);
+static Expression * decl ReadExpression(ParseInput *input);
 
-bool
+static bool
 func ConstructorMatchesParams(Constructor *ctor, FuncCallParam *first_call_param)
 {
 	FuncParam *param = ctor->header.first_param;
@@ -3699,7 +3700,7 @@ func ConstructorMatchesParams(Constructor *ctor, FuncCallParam *first_call_param
 	return match;
 }
 
-Constructor *
+static Constructor *
 func GetConstructor(ConstructorStack *stack, FuncCallParam *first_param)
 {
 	Constructor *result = 0;
@@ -3715,7 +3716,7 @@ func GetConstructor(ConstructorStack *stack, FuncCallParam *first_param)
 	return result;
 }
 
-ConstructorCallExpression *
+static ConstructorCallExpression *
 func ReadConstructorCallExpression(ParseInput *input, VarType *type)
 {
 	Assert(type->id == StructTypeId);
@@ -3773,7 +3774,7 @@ func ReadConstructorCallExpression(ParseInput *input, VarType *type)
 	return result;
 }
 
-Expression *
+static Expression *
 func ReadNumberLevelExpression(ParseInput *input)
 {
 	Expression *expr = 0;
@@ -4060,7 +4061,7 @@ func ReadNumberLevelExpression(ParseInput *input)
 	return expr;
 }
 
-Expression * 
+static Expression * 
 func ReadBitLevelExpression(ParseInput *input)
 {
 	Expression *expr = ReadNumberLevelExpression(input);
@@ -4126,7 +4127,7 @@ func ReadBitLevelExpression(ParseInput *input)
 	return expr;
 }
 
-Expression * 
+static Expression * 
 func ReadProductLevelExpression(ParseInput *input)
 {
 	Expression *expr = ReadBitLevelExpression(input);
@@ -4180,7 +4181,7 @@ func ReadProductLevelExpression(ParseInput *input)
 	return expr;
 }
 
-Expression * 
+static Expression * 
 func ReadSumLevelExpression(ParseInput *input)
 {
 	Expression *expr = 0;
@@ -4250,7 +4251,7 @@ func ReadSumLevelExpression(ParseInput *input)
 	return expr;
 }
 
-Expression * 
+static Expression * 
 func ReadCompareLevelExpression(ParseInput *input)
 {
 	Expression *expr = ReadSumLevelExpression(input);
@@ -4383,7 +4384,7 @@ func ReadCompareLevelExpression(ParseInput *input)
 	return expr;
 }
 
-Expression * 
+static Expression * 
 func ReadExpression(ParseInput *input)
 {
 	Expression *expr = ReadCompareLevelExpression(input);
@@ -4425,7 +4426,7 @@ func ReadExpression(ParseInput *input)
 	return expr;
 }
 
-enum InstructionId
+enum tdef InstructionId
 {
 	NoInstructionId,
 
@@ -4451,20 +4452,20 @@ enum InstructionId
 	WhileInstructionId,
 };
 
-struct Instruction
+struct tdef Instruction
 {
 	InstructionId id;
 	Instruction *next;
 };
 
-struct BlockInstruction
+struct tdef BlockInstruction
 {
 	Instruction inst;
 
 	Instruction *first;
 };
 
-struct ForInstruction
+struct tdef ForInstruction
 {
 	Instruction inst;
 
@@ -4474,7 +4475,7 @@ struct ForInstruction
 	BlockInstruction *body;
 };
 
-struct IfInstruction
+struct tdef IfInstruction
 {
 	Instruction instr;
 
@@ -4483,7 +4484,7 @@ struct IfInstruction
 	Instruction *first_else;
 };
 
-struct ElseInstruction
+struct tdef ElseInstruction
 {
 	Instruction instr;
 
@@ -4491,7 +4492,7 @@ struct ElseInstruction
 	BlockInstruction *body;
 };
 
-struct WhileInstruction
+struct tdef WhileInstruction
 {
 	Instruction instr;
 
@@ -4499,7 +4500,7 @@ struct WhileInstruction
 	BlockInstruction *body;
 };
 
-struct CreateVariableInstruction
+struct tdef CreateVariableInstruction
 {
 	Instruction instr;
 
@@ -4508,7 +4509,7 @@ struct CreateVariableInstruction
 	Expression *init;
 };
 
-struct CreateMetaVariableInstruction
+struct tdef CreateMetaVariableInstruction
 {
 	Instruction instr;
 	
@@ -4517,21 +4518,21 @@ struct CreateMetaVariableInstruction
 	Expression *expression;
 };
 
-struct IncrementInstruction
+struct tdef IncrementInstruction
 {
 	Instruction instr;
 
 	Expression *expression;
 };
 
-struct DecrementInstruction
+struct tdef DecrementInstruction
 {
 	Instruction instr;
 
 	Expression *expression;
 };
 
-struct AssignInstruction
+struct tdef AssignInstruction
 {
 	Instruction instr;
 
@@ -4539,14 +4540,14 @@ struct AssignInstruction
 	Expression *right;
 };
 
-struct ReturnInstruction
+struct tdef ReturnInstruction
 {
 	Instruction instr;
 
 	Expression *value;
 };
 
-struct OrEqualsInstruction
+struct tdef OrEqualsInstruction
 {
 	Instruction instr;
 
@@ -4554,7 +4555,7 @@ struct OrEqualsInstruction
 	Expression *right;
 };
 
-struct PlusEqualsInstruction
+struct tdef PlusEqualsInstruction
 {
 	Instruction instr;
 
@@ -4562,7 +4563,7 @@ struct PlusEqualsInstruction
 	Expression *right;
 };
 
-struct MinusEqualsInstruction
+struct tdef MinusEqualsInstruction
 {
 	Instruction instr;
 
@@ -4570,7 +4571,7 @@ struct MinusEqualsInstruction
 	Expression *right;
 };
 
-struct StarEqualsInstruction
+struct tdef StarEqualsInstruction
 {
 	Instruction instr;
 
@@ -4578,41 +4579,41 @@ struct StarEqualsInstruction
 	Expression *right;
 };
 
-struct FuncCallInstruction
+struct tdef FuncCallInstruction
 {
 	Instruction instr;
 
 	FuncCallExpression *call_expression;
 };
 
-struct UseInstruction
+struct tdef UseInstruction
 {
 	Instruction instr;
 
 	Expression *expression;
 };
 
-struct BreakInstruction
+struct tdef BreakInstruction
 {
 	Instruction instr;
 };
 
-struct ContinueInstruction
+struct tdef ContinueInstruction
 {
 	Instruction instr;
 };
 
-struct DeclInstruction
+struct tdef DeclInstruction
 {
 	Instruction instr;
 
 	FuncHeader func_header;
 };
 
-Instruction *ReadInstruction(ParseInput *input);
-BlockInstruction *ReadBlock(ParseInput *input);
+static Instruction * decl ReadInstruction(ParseInput *input);
+static BlockInstruction * decl ReadBlock(ParseInput *input);
 
-IncrementInstruction * 
+static IncrementInstruction * 
 func PushIncrementInstruction(MemArena *arena, Expression *expression)
 {
 	IncrementInstruction *result = ArenaPushType(arena, IncrementInstruction);
@@ -4623,7 +4624,7 @@ func PushIncrementInstruction(MemArena *arena, Expression *expression)
 	return result;
 }
 
-DecrementInstruction *
+static DecrementInstruction *
 func PushDecrementInstruction(MemArena *arena, Expression *expression)
 {
 	DecrementInstruction *result = ArenaPushType(arena, DecrementInstruction);
@@ -4648,7 +4649,7 @@ static Token global_for_iterator_name =
 	2
 };
 
-Expression *
+static Expression *
 func GetArraySizeForIteration(Expression *expression, MemArena* arena)
 {
 	Assert(expression && expression->type->id == ArrayTypeId);
@@ -4670,7 +4671,7 @@ func GetArraySizeForIteration(Expression *expression, MemArena* arena)
 	return size_expression;
 }
 
-BreakInstruction *
+static BreakInstruction *
 func ReadBreakInstruction(ParseInput *input)
 {
 	MemArena* arena = input->arena;
@@ -4683,7 +4684,7 @@ func ReadBreakInstruction(ParseInput *input)
 	return instruction;
 }
 
-ContinueInstruction *
+static ContinueInstruction *
 func ReadContinueInstruction(ParseInput *input)
 {
 	MemArena *arena = input->arena;
@@ -4696,7 +4697,7 @@ func ReadContinueInstruction(ParseInput *input)
 	return instruction;
 }
 
-WhileInstruction *
+static WhileInstruction *
 func ReadWhileInstruction(ParseInput *input)
 {
 	MemArena *arena = input->arena;
@@ -4717,7 +4718,7 @@ func ReadWhileInstruction(ParseInput *input)
 	return instruction;
 }
 
-ForInstruction * 
+static ForInstruction * 
 func ReadForInstruction(ParseInput *input)
 {
 	MemArena *arena = input->arena;
@@ -4982,9 +4983,9 @@ func ReadForInstruction(ParseInput *input)
 	return instruction;
 }
 
-IfInstruction *ReadIfInstruction(ParseInput *input);
+static IfInstruction * decl ReadIfInstruction(ParseInput *input);
 
-ElseInstruction *
+static ElseInstruction *
 func ReadElseInstruction(ParseInput *input)
 {
 	ElseInstruction *instruction = 0;
@@ -5010,7 +5011,7 @@ func ReadElseInstruction(ParseInput *input)
 	return instruction;
 }
 
-IfInstruction * 
+static IfInstruction * 
 func ReadIfInstruction(ParseInput *input)
 {
 	MemArena *arena = input->arena;
@@ -5041,7 +5042,7 @@ func ReadIfInstruction(ParseInput *input)
 	return instruction;
 }
 
-ReturnInstruction * 
+static ReturnInstruction * 
 func ReadReturnInstruction(ParseInput *input)
 {
 	ReturnInstruction *instruction = 0;
@@ -5060,7 +5061,7 @@ func ReadReturnInstruction(ParseInput *input)
 	return instruction;
 }
 
-bool 
+static bool 
 func CanUseExpression(Expression *expression)
 {
 	bool can_use = false;
@@ -5080,7 +5081,7 @@ func CanUseExpression(Expression *expression)
 	return can_use;
 }
 
-void 
+static void 
 func UseExpression(ParseInput *input, Expression *expression)
 {
 	Assert(CanUseExpression(expression));
@@ -5113,7 +5114,7 @@ func UseExpression(ParseInput *input, Expression *expression)
 	}
 }
 
-UseInstruction * 
+static UseInstruction * 
 func ReadUseInstruction(ParseInput *input)
 {
 	MemArena *arena = input->arena;
@@ -5140,7 +5141,7 @@ func ReadUseInstruction(ParseInput *input)
 	return instruction;
 }
 
-FuncHeader
+static FuncHeader
 func ReadFuncHeaderWithoutFuncKeyword(ParseInput *input)
 {
 	Token func_name = ReadToken(input);
@@ -5238,7 +5239,7 @@ func ReadFuncHeaderWithoutFuncKeyword(ParseInput *input)
 	return header;
 }
 
-FuncHeader
+static FuncHeader
 func ReadFuncHeader(ParseInput *input)
 {
 	Assert(ReadTokenType(input, FuncTokenId));
@@ -5246,7 +5247,7 @@ func ReadFuncHeader(ParseInput *input)
 	return header;
 }
 
-DeclInstruction *
+static DeclInstruction *
 func ReadDeclInstruction(ParseInput *input)
 {
 	DeclInstruction *instruction = 0;
@@ -5272,7 +5273,7 @@ func ReadDeclInstruction(ParseInput *input)
 	return instruction;
 }
 
-Instruction * 
+static Instruction * 
 func ReadInstruction(ParseInput *input)
 {
 	Instruction *instruction = 0;
@@ -5635,7 +5636,7 @@ func ReadInstruction(ParseInput *input)
 	return instruction;
 }
 
-bool 
+static bool 
 func NeedsSemicolon(InstructionId id)
 {
 	bool needs_semicolon = false;
@@ -5659,7 +5660,7 @@ func NeedsSemicolon(InstructionId id)
 	return needs_semicolon;
 }
 
-BlockInstruction * 
+static BlockInstruction * 
 func ReadBlock(ParseInput *input)
 {
 	BlockInstruction *block = 0;
@@ -5710,7 +5711,7 @@ func ReadBlock(ParseInput *input)
 	return block;
 }
 
-Func *
+static Func *
 func ReadFunc(ParseInput *input)
 {
 	VarStack *var_stack = &input->var_stack;
@@ -5745,7 +5746,7 @@ func ReadFunc(ParseInput *input)
 	return f;
 }
 
-Enum *
+static Enum *
 func ReadEnum(ParseInput *input)
 {
 	Assert(ReadTokenType(input, EnumTokenId));
@@ -5803,14 +5804,14 @@ func ReadEnum(ParseInput *input)
 	return e;
 }
 
-bool
+static bool
 func IsValidOperatorToken(Token token)
 {
 	bool is_valid = IsValidOperatorTokenId(token.id);
 	return is_valid;
 }
 
-Operator *
+static Operator *
 func ReadOperator(ParseInput *input)
 {
 	StackState stack_state = GetStackState(input);
@@ -5881,7 +5882,7 @@ func ReadOperator(ParseInput *input)
 	return op;
 }
 
-Constructor *
+static Constructor *
 func ReadConstructor(ParseInput *input)
 {
 	StackState stack_state = GetStackState(input);
@@ -5922,7 +5923,7 @@ func ReadConstructor(ParseInput *input)
 	return ctor;
 }
 
-Struct * 
+static Struct * 
 func ReadStruct(ParseInput *input)
 {
 	Struct *result = 0;
@@ -6047,7 +6048,7 @@ func ReadStruct(ParseInput *input)
 	return result;
 }
 
-bool
+static bool
 func MatchVarWithType(Var *var, VarType *type)
 {
 	bool can_match = false;
@@ -6080,20 +6081,20 @@ func MatchVarWithType(Var *var, VarType *type)
 	return can_match;
 }
 
-struct Output
+struct tdef Output
 {
 	MemArena *arena;
 	int tabs;
 };
 
-void 
+static void 
 func WriteChar(Output *output, char c)
 {
 	char *mem = ArenaPushType(output->arena, char);
 	*mem = c;
 }
 
-void 
+static void 
 func WriteTabs(Output *output)
 {
 	Assert(output->tabs >= 0);
@@ -6106,7 +6107,7 @@ func WriteTabs(Output *output)
 	}
 }
 
-void 
+static void 
 func WriteString(Output *output, char* string)
 {
 	for(int i = 0; string[i]; i++)
@@ -6115,7 +6116,7 @@ func WriteString(Output *output, char* string)
 	}
 }
 
-void 
+static void 
 func WriteToken(Output *output, Token token)
 {
 	for(int i = 0; i < token.length; i++)
@@ -6124,9 +6125,9 @@ func WriteToken(Output *output, Token token)
 	}
 }
 
-void WriteExpression(Output *output, Expression *expression);
+static void decl WriteExpression(Output *output, Expression *expression);
 
-void 
+static void 
 func WriteType(Output *output, VarType *type)
 {
 	Assert(type != 0);
@@ -6212,9 +6213,9 @@ func WriteType(Output *output, VarType *type)
 	}
 }
 
-void WriteExpression(Output *output, Expression *expression);
+static void decl WriteExpression(Output *output, Expression *expression);
 
-void 
+static void 
 func WriteVar(Output *output, Var var)
 {
 	if(var.use_from)
@@ -6226,7 +6227,7 @@ func WriteVar(Output *output, Var var)
 	WriteToken(output, var.name);
 }
 
-char *
+static char *
 func GetOperatorFuncName(TokenId token_id)
 {
 	Assert(IsValidOperatorTokenId(token_id));
@@ -6253,7 +6254,7 @@ func GetOperatorFuncName(TokenId token_id)
 	return name;
 }
 
-void
+static void
 func WriteIntegerConstantAsType(Output *output, Token token, VarType *type)
 {
 	Assert(IsNumericalType(type));
@@ -6271,7 +6272,7 @@ func WriteIntegerConstantAsType(Output *output, Token token, VarType *type)
 	}
 }
 
-void 
+static void 
 func WriteExpression(Output *output, Expression *expression)
 {
 	switch(expression->id)
@@ -6607,7 +6608,7 @@ func WriteExpression(Output *output, Expression *expression)
 	}
 }
 
-void 
+static void 
 func WriteTypeAndVar(Output *output, VarType *type, Token var_name)
 {
 	VarType *non_array_type = type;
@@ -6634,9 +6635,10 @@ func WriteTypeAndVar(Output *output, VarType *type, Token var_name)
 }
 
 
-void WriteBlock(Output *output, BlockInstruction *block);
+static void decl WriteBlock(Output *output, BlockInstruction *block);
+static void decl WriteFuncHeader(Output *output, FuncHeader *header);
 
-void
+static void
 func WriteInstruction(Output *output, Instruction *instruction)
 {
 	switch(instruction->id)
@@ -6819,7 +6821,6 @@ func WriteInstruction(Output *output, Instruction *instruction)
 		}
 		case DeclInstructionId:
 		{
-			decl void WriteFuncHeader(Output *output, FuncHeader *header);
 			DeclInstruction *decl_instruction = (DeclInstruction *)instruction;
 			WriteFuncHeader(output, &decl_instruction->func_header);
 			break;
@@ -6831,7 +6832,7 @@ func WriteInstruction(Output *output, Instruction *instruction)
 	}
 }
 
-bool 
+static bool 
 func IsPreprocessorInstruction(Instruction *instruction)
 {
 	bool result = false;
@@ -6853,7 +6854,7 @@ func IsPreprocessorInstruction(Instruction *instruction)
 	return result;
 }
 
-void 
+static void 
 func WriteBlock(Output *output, BlockInstruction *block)
 {
 	Assert(block != 0);
@@ -6881,7 +6882,7 @@ func WriteBlock(Output *output, BlockInstruction *block)
 	WriteString(output, "}\n");
 }
 
-void
+static void
 func WriteFuncHeader(Output* output, FuncHeader* header)
 {
 	if(header->return_type)
@@ -6922,7 +6923,7 @@ func WriteFuncHeader(Output* output, FuncHeader* header)
 	WriteString(output, ")");
 }
 
-void 
+static void 
 func WriteFunc(Output *output, Func *f)
 {
 	WriteFuncHeader(output, &f->header);
@@ -6932,7 +6933,7 @@ func WriteFunc(Output *output, Func *f)
 	WriteBlock(output, f->body);
 }
 
-void
+static void
 func WriteOperator(Output *output, Operator *op)
 {
 	WriteType(output, op->return_type);
@@ -6954,7 +6955,7 @@ func WriteOperator(Output *output, Operator *op)
 	WriteBlock(output, op->body);
 }
 
-void
+static void
 func WriteConstructor(Output *output, Constructor *ctor)
 {
 	WriteFuncHeader(output, &ctor->header);
@@ -6965,7 +6966,7 @@ func WriteConstructor(Output *output, Constructor *ctor)
 	WriteBlock(output, ctor->body);
 }
 
-void
+static void
 func WriteEnum(Output *output, Enum *e)
 {
 	WriteString(output, "enum ");
@@ -6994,7 +6995,7 @@ func WriteEnum(Output *output, Enum *e)
 	WriteString(output, "};\n");
 }
 
-void 
+static void 
 func WriteStruct(Output *output, Struct *str)
 {
 	WriteTabs(output);
@@ -7022,9 +7023,9 @@ func WriteStruct(Output *output, Struct *str)
 	WriteString(output, "};\n");
 }
 
-decl void ReadAndWriteDefinitions(ParseInput *input, Output *output);
+static void decl ReadAndWriteDefinitions(ParseInput *input, Output *output);
 
-void
+static void
 func ReadAndWriteNamespace(ParseInput *input, Output *output)
 {
 	Assert(ReadTokenType(input, NamespaceTokenId));
@@ -7049,7 +7050,7 @@ func ReadAndWriteNamespace(ParseInput *input, Output *output)
 	}
 }
 
-void
+static void
 func ReadAndWriteDefinitions(ParseInput *input, Output *output)
 {
 	bool first = true;
@@ -7134,7 +7135,7 @@ func ReadAndWriteDefinitions(ParseInput *input, Output *output)
 	}
 }
 
-void 
+static void 
 func ReadAndWriteFile(ParseInput *input, Output *output)
 {
 	ReadAndWriteDefinitions(input, output);

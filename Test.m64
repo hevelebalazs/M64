@@ -3,7 +3,9 @@ struct Bitmap
 	width: UInt32;
 	height: UInt32;
 
-	pixels:[100][100]UInt32;
+	pixels:@UInt32;
+	// use pixels:@[height, width]UInt32;
+	// pixels[row][col];
 }
 
 func ClearBitmapToColor(bitmap:@Bitmap, color:UInt32)
@@ -13,7 +15,9 @@ func ClearBitmapToColor(bitmap:@Bitmap, color:UInt32)
 	{
 		for col := 0 to < width
 		{
-			pixels[row][col] = color;
+			#pixel := (pixels + width * row + col)@;
+			pixel = color;
+			pixel = pixel * pixel;
 		}
 	}
 }

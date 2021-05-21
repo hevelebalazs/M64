@@ -1,6 +1,15 @@
+struct Matrix
+{
+	row_n:UInt32;
+	col_n:UInt32;
+	elems:@Int32;
+
+	#elem_n := row_n * col_n;
+};
+
 func MetaTest()
 {
-	#N := 50;
+	#N := 2*25;
 	a:[N][N]Int32;
 	
 	for i := [] in a
@@ -9,8 +18,8 @@ func MetaTest()
 		{
 			#aij := a[i][j];
 			aij = 10;
-			aij := 10;
 		}
 	}
 
+	aij := 10;
 }
