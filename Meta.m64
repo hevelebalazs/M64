@@ -5,7 +5,17 @@ struct Matrix
 	elems:@Int32;
 
 	#elem_n := row_n * col_n;
-};
+}
+
+func GetMatrixSum(matrix:@Matrix):UInt32
+{
+	sum := 0;
+	for i := 0 to < matrix.elem_n
+	{
+		sum += (matrix.elems + i)@;
+	}
+	return sum;
+}
 
 func MetaTest()
 {

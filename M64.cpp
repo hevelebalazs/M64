@@ -539,6 +539,7 @@ enum tdef ExpressionId
 	RightShiftExpressionId,
 	StringConstantExpressionId,
 	StructVarExpressionId,
+	StructDefVarExpressionId,
 	StructMetaVarExpressionId,
 	SubtractExpressionId,
 	TernaryOperatorExpressionId,
@@ -695,6 +696,14 @@ struct tdef StructVarExpression
 	Expression expr;
 
 	Expression *struct_expression;
+	Token var_name;
+};
+
+struct tdef StructDefVarExpression
+{
+	Expression expr;
+
+	Struct *struct_def;
 	Token var_name;
 };
 
@@ -1830,6 +1839,7 @@ struct tdef ParseInput
 	ConstructorStack constructor_stack;
 	MemArena *token_name_arena;
 	Token namespace_name;
+	Struct *in_struct_definition;
 };
 
 static void
@@ -3456,6 +3466,24 @@ func PushStructVarExpression(MemArena *arena, Expression *struct_expression, Tok
 	return result;
 }
 
+static StructDefVarExpression *
+func PushStructDefVarExpression(MemArena *arena, Struct *struct_def, Token var_name)
+{
+	Assert(struct_def != 0);
+	StructVar *struct_var = GetStructVar(struct_def, var_name);
+	Assert(struct_var != 0);
+
+	StructDefVarExpression *result = ArenaPushType(arena, StructDefVarExpression);
+	Assert(result != 0);
+	result->expr.id = StructDefVarExpressionId;
+	result->expr.is_const = false;
+	result->expr.type = struct_var->type;
+	result->expr.has_final_type = true;
+	result->struct_def = struct_def;
+	result->var_name = var_name;
+	return result;
+}
+
 static StructMetaVarExpression *
 func PushStructMetaVarExpression(MemArena *arena, Expression *struct_expression, Token var_name)
 {
@@ -3889,27 +3917,28 @@ func ReadNumberLevelExpression(ParseInput *input)
 	}
 	else if(ReadTokenType(input, NameTokenId))
 	{
-		if(VarExists(&input->var_stack, input->last_token))
+		Token name = input->last_token;
+		if(VarExists(&input->var_stack, name))
 		{
-			Var *var = GetVar(&input->var_stack, input->last_token);
+			Var *var = GetVar(&input->var_stack, name);
 			Assert(var != 0);
 			expr = (Expression *)PushVarExpression(input->arena, *var);
 		}
-		else if(MetaVarExists(&input->meta_var_stack, input->last_token))
+		else if(MetaVarExists(&input->meta_var_stack, name))
 		{
-			MetaVar *var = GetMetaVar(&input->meta_var_stack, input->last_token);
+			MetaVar *var = GetMetaVar(&input->meta_var_stack, name);
 			Assert(var != 0);
 			expr = (Expression *)PushMetaVarExpression(input->arena, *var);
 		}
-		else if(EnumMemberExists(&input->enum_stack, input->last_token))
+		else if(EnumMemberExists(&input->enum_stack, name))
 		{
-			EnumMember member = GetEnumMember(&input->enum_stack, input->last_token);
+			EnumMember member = GetEnumMember(&input->enum_stack, name);
 			Assert(member.e != 0);
 			expr = (Expression *)PushEnumMemberExpression(input->arena, member);
 		}
-		else if(FuncExists(&input->func_stack, input->last_token))
+		else if(FuncExists(&input->func_stack, name))
 		{
-			Func *f = GetFunc(&input->func_stack, input->last_token);
+			Func *f = GetFunc(&input->func_stack, name);
 			Assert(f != 0);
 			if(!ReadTokenType(input, OpenParenTokenId))
 			{
@@ -3973,9 +4002,9 @@ func ReadNumberLevelExpression(ParseInput *input)
 
 			expr = (Expression *)PushFuncCallExpression(input->arena, f, first_param);
 		}
-		else if(TypeExists(input, input->last_token))
+		else if(TypeExists(input, name))
 		{
-			VarType *type = GetType(input, input->last_token);
+			VarType *type = GetType(input, name);
 
 			if(type->id == StructTypeId)
 			{
@@ -4002,9 +4031,21 @@ func ReadNumberLevelExpression(ParseInput *input)
 				expr = (Expression *)PushCastExpression(input->arena, type, expression);
 			}
 		}
+		else if(input->in_struct_definition)
+		{
+			Struct *in_struct = input->in_struct_definition;
+			if(StructHasVar(in_struct, name))
+			{
+				expr = (Expression *)PushStructDefVarExpression(input->arena, in_struct, name);
+			}
+			else
+			{
+				SetError(input, "Unknown name (not a func, var, struct var, or type).");
+			}
+		}
 		else
 		{
-			SetError(input, "Unknown name (not a func, var or type).");
+			SetError(input, "Unknown name (not a func, var, or type).");
 		}
 	}
 	else if(ReadTokenType(input, TrueTokenId))
@@ -6037,8 +6078,12 @@ func ReadConstructor(ParseInput *input)
 static Struct * 
 func ReadStruct(ParseInput *input)
 {
-	Struct *result = 0;
 	Assert(ReadTokenType(input, StructTokenId));
+
+	Struct *result = ArenaPushType(input->arena, Struct);
+	*result = {};
+	Assert(!input->in_struct_definition);
+	input->in_struct_definition = result;
 
 	Token name = ReadToken(input);
 	if(name.id != NameTokenId)
@@ -6051,9 +6096,7 @@ func ReadStruct(ParseInput *input)
 		SetError(input, "Expected '{' after struct name.");
 	}
 
-	StructVar *first_var = 0;
 	StructVar *last_var = 0;
-	StructMetaVar *first_meta_var = 0;
 	StructMetaVar *last_meta_var = 0;
 	while(true)
 	{
@@ -6094,13 +6137,13 @@ func ReadStruct(ParseInput *input)
 
 			if(!last_meta_var)
 			{
-				Assert(!first_meta_var);
-				first_meta_var = var;
+				Assert(!result->first_meta_var);
+				result->first_meta_var = var;
 				last_meta_var = var;
 			}
 			else
 			{
-				Assert(first_meta_var);
+				Assert(result->first_meta_var);
 				last_meta_var->next = var;
 				last_meta_var = var;
 			}
@@ -6153,13 +6196,13 @@ func ReadStruct(ParseInput *input)
 
 				if(!last_var)
 				{
-					Assert(!first_var);
-					first_var = var;
+					Assert(!result->first_var);
+					result->first_var = var;
 					last_var = var;
 				}
 				else
 				{
-					Assert(first_var);
+					Assert(result->first_var);
 					last_var->next = var;
 					last_var = var;
 				}
@@ -6167,8 +6210,6 @@ func ReadStruct(ParseInput *input)
 		}
 	}
 
-	result = ArenaPushType(input->arena, Struct);
-	result->first_var = first_var;
 	result->name = name;
 	result->namespace_name = input->namespace_name;
 
@@ -6203,6 +6244,8 @@ func ReadStruct(ParseInput *input)
 
 		struct_var = struct_var->next;
 	}
+
+	input->in_struct_definition = 0;
 
 	return result;
 }
@@ -6243,6 +6286,7 @@ func MatchVarWithType(Var *var, VarType *type)
 struct tdef Output
 {
 	MemArena *arena;
+	Expression *in_struct;
 	int tabs;
 };
 
@@ -6436,6 +6480,7 @@ func WriteExpression(Output *output, Expression *expression)
 {
 	switch(expression->id)
 	{
+		// TODO: rename typed expression to expr everywhere!
 		case IntegerConstantExpressionId:
 		{
 			IntegerConstantExpression *integer_constant = (IntegerConstantExpression *)expression;
@@ -6571,10 +6616,32 @@ func WriteExpression(Output *output, Expression *expression)
 			WriteToken(output, struct_var->var_name);
 			break;
 		}
+		case StructDefVarExpressionId:
+		{
+			Assert(output->in_struct);
+			StructDefVarExpression *expr = (StructDefVarExpression *)expression;
+			{
+				Assert(output->in_struct->type->id == StructTypeId);
+				StructType *struct_type = (StructType *)output->in_struct->type;
+				Assert(struct_type->str == expr->struct_def);
+			}
+
+			WriteExpression(output, output->in_struct);
+			WriteString(output, ".");
+			WriteToken(output, expr->var_name);
+			break;
+		}
 		case StructMetaVarExpressionId:
 		{
 			StructMetaVarExpression *var = (StructMetaVarExpression *)expression;
+
+			Assert(output->in_struct == 0);
+			output->in_struct = var->struct_expression;
+
 			WriteExpression(output, var->meta_expression);
+
+			Assert(output->in_struct == var->struct_expression);
+			output->in_struct = 0;
 			break;
 		}
 		case FuncCallExpressionId:
