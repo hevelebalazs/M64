@@ -192,7 +192,7 @@ struct tdef Struct
 	StructMetaVar *first_meta_var;
 };
 
-// *TODO: use [size1, ..., sizen] for multi-dimensional arrays
+// TODO: allow [i][j] style array indexing for [size0,size1] arrays
 struct decl Expression;
 struct decl ExpressionList;
 struct tdef ArrayType
@@ -659,7 +659,7 @@ struct tdef ArrayIndexExpression
 	Expression expr;
 
 	Expression *array;
-	Expression *index;
+	ExpressionList *index_list;
 };
 
 struct tdef ProductExpression
@@ -3328,20 +3328,17 @@ func PushDereferenceExpression(MemArena *arena, Expression *base)
 }
 
 static ArrayIndexExpression * 
-func PushArrayIndexExpression(MemArena *arena, Expression *array, Expression *index)
+func PushArrayIndexExpression(MemArena *arena, Expression *array, ExpressionList *index_list)
 {
-	Assert(array != 0 && index != 0);
-	Assert(array->type->id == ArrayTypeId);
+	Assert(array != 0 && array->type != 0 && array->type->id == ArrayTypeId);
 	ArrayType *array_type = (ArrayType *)array->type;
-	Assert(IsIntegerType(index->type));
 	ArrayIndexExpression *result = ArenaPushType(arena, ArrayIndexExpression);
-	Assert(result != 0);
 	result->expr.id = ArrayIndexExpressionId;
-	result->expr.is_const = (array->is_const && index->is_const);
+	result->expr.is_const = false;
 	result->expr.has_final_type = true;
 	result->expr.type = array_type->element_type;
 	result->array = array;
-	result->index = index;
+	result->index_list = index_list;
 	return result;
 }
 
@@ -4106,27 +4103,65 @@ func ReadNumberLevelExpression(ParseInput *input)
 			{
 				expr = (Expression *)PushDereferenceExpression(input->arena, expr);
 			}
-
 			if(expr->type == 0 || expr->type->id != ArrayTypeId)
 			{
 				SetError(input, "Cannot index non-array expression.");
-				break;
 			}
 
-			Expression *index = ReadExpression(input);
-			if(index == 0 || !IsIntegerType(index->type))
+			ArrayType *array_type = (ArrayType *)expr->type;
+
+			int dimension = 0;
+			int is_first_elem = true;
+			ExpressionListElem *first_index_elem = 0;
+			ExpressionListElem *last_index_elem = 0;
+			while(1)
 			{
-				SetError(input, "Array index is not integer.");
-				break;
+				if(ReadTokenType(input, CloseBracketsTokenId))
+				{
+					break;
+				}
+
+				if(!is_first_elem)
+				{
+					if(!ReadTokenType(input, CommaTokenId))
+					{
+						SetError(input, "Expected ',' between array index expressions.");
+					}
+				}
+
+				Expression *index = ReadExpression(input);
+				if(index == 0 || !IsIntegerType(index->type))
+				{
+					SetError(input, "Array index is not integer.");
+				}
+
+				ExpressionListElem *elem = ArenaPushType(input->arena, ExpressionListElem);
+				elem->next = 0;
+				elem->expr = index;
+				if(!last_index_elem)
+				{
+					Assert(!first_index_elem);
+					first_index_elem = elem;
+					last_index_elem = elem;
+				}
+				else
+				{
+					Assert(first_index_elem);
+					last_index_elem->next = elem;
+					last_index_elem = elem;
+				}
+
+				dimension++;
+
+				is_first_elem = false;
 			}
 
-			if(!ReadTokenType(input, CloseBracketsTokenId))
+			if(dimension != array_type->dimension)
 			{
-				SetError(input, "Expected ']' after array index expression.");
-				break;
+				SetError(input, "Incorrect number of array index expressions.");
 			}
 
-			expr = (Expression *)PushArrayIndexExpression(input->arena, expr, index);
+			expr = (Expression *)PushArrayIndexExpression(input->arena, expr, first_index_elem);
 		}
 		else if(ReadTokenType(input, DotTokenId))
 		{
@@ -6727,9 +6762,17 @@ func WriteExpression(Output *output, Expression *expression)
 			ArrayIndexExpression *expr = (ArrayIndexExpression *)expression;
 			WriteString(output, "(");
 			WriteExpression(output, expr->array);
-			WriteString(output, ")[");
-			WriteExpression(output, expr->index);
-			WriteString(output, "]");
+			WriteString(output, ")");
+
+			ExpressionListElem *index_elem = expr->index_list;
+			while(index_elem)
+			{
+				WriteString(output, "[");
+				WriteExpression(output, index_elem->expr);
+				WriteString(output, "]");
+
+				index_elem = index_elem->next;
+			}
 			break;
 		}
 		case OperatorCallExpressionId:

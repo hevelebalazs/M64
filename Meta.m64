@@ -17,7 +17,7 @@ func GetMatrixSum(matrix:@Matrix):UInt32
 	{
 		for col := 0 to < col_n
 		{
-			// sum += elems[row, col];
+			sum += elems[row, col];
 		}
 	}
 	return sum;
