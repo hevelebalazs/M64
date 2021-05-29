@@ -133,6 +133,7 @@ enum tdef VarTypeId
 	PointerTypeId,
 	StructTypeId,
 	ArrayTypeId,
+	PointerArrayTypeId,
 	EnumTypeId
 };
 
@@ -159,8 +160,6 @@ struct tdef BaseType
 	BaseVarTypeId base_id;
 };
 
-// TODO: either add an optional array type to pointer type, or create a pointer array type
-//			to handle stuff like @[size_1,size_2] separately from simple pointer/array
 struct tdef PointerType
 {
 	VarType type;
@@ -192,10 +191,20 @@ struct tdef Struct
 	StructMetaVar *first_meta_var;
 };
 
-// TODO: allow [i][j] style array indexing for [size0,size1] arrays
+// TODO: allow [i][j] style array indexing for [size0,size1] arrays?
+//   Why?
 struct decl Expression;
 struct decl ExpressionList;
 struct tdef ArrayType
+{
+	VarType type;
+
+	int dimension;
+	ExpressionList *dimension_size_list;
+	VarType *element_type;
+};
+
+struct tdef PointerArrayType
 {
 	VarType type;
 
@@ -505,6 +514,8 @@ struct tdef MetaVarStack
 	int size;
 };
 
+// TODO: create macro to cast to a specific expression type with assert if doesn't match!
+// TODO: create macro to check if matches a specific expression type and creates a variable if it does
 enum tdef ExpressionId
 {
 	NoExpressionId,
@@ -1025,351 +1036,6 @@ func SkipWhiteSpaceAndComments(CodePosition *pos)
 		}
 	}
 }
-
-/*
-enum BaseTypeId
-{
-	No,
-	Int32,
-	UInt32,
-	Bool32
-}
-
-typeenum VarType
-{
-	No,
-	BaseType(base_id:BaseVarTypeId),
-	PointerType(pointed_type:@VarType),
-	StructType(name:Token, first_var:@StructVar, first_meta_var:@StructMetaVar),
-	ArrayType(size:Token, element_type:@VarType)
-}
-
-func WriteType(output:@Output, type:@VarType)
-{
-	Assert(type != 0);
-	switch(type)
-	{
-		case BaseType:
-		{
-			switch(type.base)
-			{
-				case Int32:
-				{
-					WriteString(output, "int");
-				}
-				case UInt32:
-				{
-					WriteString(output, "unsigned int");
-				}
-				case Real32:
-				{
-					WriteString(output, "float");
-				}
-				case Bool32:
-				{
-					WriteString(output, "bool");
-				}
-				default:
-				{
-					DebugBreak();
-				}
-			}
-		}
-		case PointerType:
-		{
-			WriteType(output, type.pointed_type);
-			WriteString(output, "*");
-		}
-		case StructType:
-		{
-			WriteToken(output, type.str.name);
-		}
-		case ArrayType:
-		{
-			WriteString(output, "(");
-			WriteType(output, type.element_type);
-			WriteString(output, ")[");
-			WriteToken(output, type.size);
-			WriteString(output, "]");
-		}
-		default:
-		{
-			DebugBreak();
-		}
-	}
-}
-
-func ReadVarType(input:@ParseInput):@VarType
-{
-	use input;
-
-	type:@VarType;
-
-	if ReadTokenType(input, AtTokenId)
-	{
-		pointed_type := ReadVarType(input);
-		if !pointed_type
-		{
-			SetError(input, ExpectedVarTypeErrorId);
-		}
-
-		if !error
-		{
-			type = PushPointerType(arena, pointed_type);
-		}
-	}
-	else if ReadTokenType(input, OpenBracketsTokenId)
-	{
-		if !ReadTokenType(input, IntegerConstantTokenId)
-		{
-			SetError(input, InvalidArraySizeErrorId);
-		}
-
-		size := last_token;
-
-		if !ReadTokenType(input, CloseBracketsTokenId)
-		{
-			SetError(input, NoCloseBracketsErrorId);
-		}
-
-		element_type := ReadVarType(input);
-		
-		if !error
-		{
-			type = PushArrayType(arena, size, element_type);
-		}
-	}
-	else if ReadTokenType(input, NameTokenId)
-	{
-		#def CheckType(base_type_id: BaseTypeId)
-		(
-			if TokenEquals(last_token, #string(base_type_id))
-			{
-				type = PushBaseType(arena, base_type_id);
-			}
-		)
-
-		CheckType(Int32);
-		CheckType(UInt32);
-		CheckType(Real32);
-		CheckType(Bool32);
-		
-		if !type
-		{
-			str := GetStruct(@struct_stack, last_token);
-			if str
-			{
-				type = PushStructType(arena, str);
-			}
-		}
-	}
-
-	if !type
-	{
-		SetError(input, InvalidTypeErrorId);
-	}
-
-	return type;
-}
-
-typeenum Expression 
-	#typename(name) := "Expression" + name;
-	#enumname(name) := typename(name) + "Id";
-{
-	#All:
-	{
-		#enumid
-		type:@VarType;
-		is_const:Bool32;
-		has_final_type:Bool32;
-	}
-	No,
-	IntegerConstant(value:Token),
-	RealConstant(value:Token),
-	Name(value:Token),
-	Var(name:Token),
-	LessThan(expr1, expr2 :@Expression),
-	GreaterThan(expr1, expr2 :@Expression),
-	LessThanOrEqualTo(expr1, expr2 :@Expression)
-	Dereference(expr:@Expression),
-	ArrayIndex(array:@Expression, index:@Expression),
-	Product(expr1, expr2 :@Expression),
-	Divide(expr1, expr2 :@Expresion),
-	Paren(expr:@Expression),
-	Add(expr1, expr2 :@Expression),
-	Subtract(expr1, expr2: @Expression),
-	StructVar(str: @Expression, name:Token),
-	StructMetaVar(str: @Expression, name:Token),
-	FuncCall(name:Token, param_list:@FuncCallParamList),
-	Cast(type:@VarType, expr:@Expression),
-	LeftShift(expr1, expr2 :@Expression),
-	RightShift(expr1, expr2: :@Expression),
-	TernaryOperator(condition, expr1, expr2 :@Expression),
-	Address(expr:@Expression),
-	Or(expr1, expr2 :@Expression),
-	Invert(expr:@Expression),
-	BoolConstant(value:Token),
-	Negate(expr:@Expression),
-	BitAnd(expr1, expr2: @Expression)
-};
-
-func WriteExpression(output:@Output, expression:@Expression)
-{
-	#command Write str:#String
-	(
-		for token: #Parse(str)
-		{
-			#typeswitch token
-			{
-				case Int32, UInt32, Real32, Bool32, Token, @Expression
-				{
-					Write(output, token);
-				}
-				case #String
-				{
-					Write(output, token.string);
-				}
-				default
-				{
-					DebugBreak();
-				}
-			}
-		}
-	)
-
-	typeswitch use expression
-	{
-		case IntegerConstant
-		{
-			#Write "{value}";
-		}
-		case RealConstant
-		{
-			
-			#Write "{value}f";
-		}
-		case Name
-		{
-			#Write "{name}";
-		}
-		case Var
-		{
-			#Write "{name}";
-		}
-		case LessThan
-		{
-			#Write "{left} < {right}";
-		}
-		case GreaterThan
-		{
-			#Write "{left} > {right}";
-		}
-		case LessThanOrEqualTo
-		{
-			#Write "{left} <= {right}";
-		}
-		case Dereference
-		{
-			#Write "(*{expr})";
-		}
-		case Add
-		{
-			#Write "{left} + {right}";
-		}
-		case Subtract
-		{
-			Write "{left} - {right}";
-		}
-		case Product
-		{
-			#Write "{left} * {right}";
-		}
-		case Divide
-		{
-			#Write "{left} / {right}";
-		}
-		case Paren
-		{
-			#Write "({expr})";
-		}
-		case StructVar
-		{
-			#Write "{expr}.{name}";
-		}
-		case FuncCall
-		{
-			param := func.first_param;
-			call_param = first_param;
-
-			#write "{func.name}(");
-
-			is_first_param := true;
-			while param
-			{
-				if !is_first_param
-				{
-					#Write ", ";
-				}
-				is_first_param = false;
-
-				Assert(call_param != 0 && call_param.expression != 0);
-				Assert(TypesEqual(param.type, call_param.type));
-
-				WriteExpression(output, call_param.expression);
-
-				param = param.next;
-				call_param = call_param.next;
-			}
-
-			#Write ")";
-		}
-		case Cast
-		{
-			#Write "({type})({expr})";
-		}
-		case LeftShift
-		{
-			#Write "{expr1} << {expr2}";
-		}
-		case RightShift
-		{
-			#Write "{expr1} >> {expr2}";
-		}
-		case TernaryOperator
-		{
-			#Write "{condition} ? {expr1} : {expr2}";
-		}
-		case Address
-		{
-			#Write "&{expr}";
-		}
-		case Or
-		{
-			#Write "{expr1} || {expr2}";
-		}
-		case Invert
-		{
-			#Write "-{expr}";
-		}
-		case BoolConstant
-		{
-			#Write "{value}";
-		}
-		case Negate
-		{
-			#Write "!{expr}";
-		}
-		case BitAnd
-		{
-			#Write "{expr1} & {expr2}";
-		}
-		case ArrayIndex
-		{
-			#Write "({array})[{index}]";
-		}
-	}
-}
-*/
 
 static StructVar *
 func GetStructVar(Struct *str, Token name)
@@ -2660,6 +2326,26 @@ func PushArrayType(MemArena *arena, ExpressionList *dimension_size_list, VarType
 	return type;
 }
 
+static PointerArrayType *
+func PushPointerArrayType(MemArena *arena, ExpressionList *dimension_size_list, VarType *element_type)
+{
+	PointerArrayType *type = ArenaPushType(arena, PointerArrayType);
+	type->type.id = PointerArrayTypeId;
+	type->dimension_size_list = dimension_size_list;
+	type->dimension = 0;
+	ExpressionListElem *dimension_size = dimension_size_list;
+	while(dimension_size)
+	{
+		Expression *size = dimension_size->expr;
+		Assert(size && IsIntegerType(size->type));
+		type->dimension++;
+
+		dimension_size = dimension_size->next;
+	}
+	type->element_type = element_type;
+	return type;
+}
+
 static Expression * decl ReadExpression(ParseInput *input);
 
 static VarType *
@@ -2669,13 +2355,69 @@ func ReadVarType(ParseInput *input)
 
 	if(ReadTokenType(input, AtTokenId))
 	{
-		VarType *pointed_type = ReadVarType(input);
-		if(!pointed_type)
+		if(ReadTokenType(input, OpenBracketsTokenId))
 		{
-			SetError(input, "Expected var type after '@'.");
-		}
+			ExpressionListElem *first_dimension_size = 0;
+			ExpressionListElem *last_dimension_size = 0;
+			bool is_first_dimension = true;
+			while(1)
+			{
+				if(ReadTokenType(input, CloseBracketsTokenId))
+				{
+					break;
+				}
 
-		type = (VarType *)PushPointerType(input->arena, pointed_type);
+				if(!is_first_dimension)
+				{
+					if(!ReadTokenType(input, CommaTokenId))
+					{
+						SetError(input, "Expected comma between array dimension sizes.");
+					}
+				}
+
+				Expression *size_expression = ReadExpression(input);
+				if(!size_expression)
+				{
+					SetError(input, "Expected array size expression.");
+				}
+				if(!IsIntegerType(size_expression->type))
+				{
+					SetError(input, "Array size expression is not integer.");
+				}
+
+				ExpressionListElem *dimension_size = ArenaPushType(input->arena, ExpressionListElem);
+				dimension_size->next = 0;
+				dimension_size->expr = size_expression;
+
+				if(!last_dimension_size)
+				{
+					Assert(!first_dimension_size);
+					first_dimension_size = dimension_size;
+					last_dimension_size = dimension_size;
+				}
+				else
+				{
+					Assert(first_dimension_size);
+					last_dimension_size->next = dimension_size;
+					last_dimension_size = dimension_size;
+				}
+
+				is_first_dimension = false;
+			}
+
+			VarType *element_type = ReadVarType(input);
+			type = (VarType *)PushPointerArrayType(input->arena, first_dimension_size, element_type);
+		}
+		else
+		{
+			VarType *pointed_type = ReadVarType(input);
+			if(!pointed_type)
+			{
+				SetError(input, "Expected var type after '@'.");
+			}
+
+			type = (VarType *)PushPointerType(input->arena, pointed_type);
+		}
 	}
 	else if(ReadTokenType(input, OpenBracketsTokenId))
 	{
@@ -3330,13 +3072,23 @@ func PushDereferenceExpression(MemArena *arena, Expression *base)
 static ArrayIndexExpression * 
 func PushArrayIndexExpression(MemArena *arena, Expression *array, ExpressionList *index_list)
 {
-	Assert(array != 0 && array->type != 0 && array->type->id == ArrayTypeId);
-	ArrayType *array_type = (ArrayType *)array->type;
+	Assert(array != 0 && array->type != 0);
+	Assert(array->type->id == ArrayTypeId || array->type->id == PointerArrayTypeId);
 	ArrayIndexExpression *result = ArenaPushType(arena, ArrayIndexExpression);
+	*result = {};
 	result->expr.id = ArrayIndexExpressionId;
 	result->expr.is_const = false;
 	result->expr.has_final_type = true;
-	result->expr.type = array_type->element_type;
+	if(array->type->id == ArrayTypeId)
+	{
+		ArrayType *array_type = (ArrayType *)array->type;
+		result->expr.type = array_type->element_type;
+	}
+	else if(array->type->id == PointerArrayTypeId)
+	{
+		PointerArrayType *type = (PointerArrayType *)array->type;
+		result->expr.type = type->element_type;
+	}
 	result->array = array;
 	result->index_list = index_list;
 	return result;
@@ -4099,16 +3851,22 @@ func ReadNumberLevelExpression(ParseInput *input)
 		}
 		else if(ReadTokenType(input, OpenBracketsTokenId))
 		{
-			if(expr->type != 0 && expr->type->id == PointerTypeId)
-			{
-				expr = (Expression *)PushDereferenceExpression(input->arena, expr);
-			}
-			if(expr->type == 0 || expr->type->id != ArrayTypeId)
+			if(expr->type == 0 || (expr->type->id != ArrayTypeId && expr->type->id != PointerArrayTypeId))
 			{
 				SetError(input, "Cannot index non-array expression.");
 			}
 
-			ArrayType *array_type = (ArrayType *)expr->type;
+			int array_dimension = 0;
+			if(expr->type->id == ArrayTypeId)
+			{
+				ArrayType *type = (ArrayType *)expr->type;
+				array_dimension = type->dimension;
+			}
+			else if(expr->type->id == PointerArrayTypeId)
+			{
+				PointerArrayType *type = (PointerArrayType *)expr->type;
+				array_dimension = type->dimension;
+			}
 
 			int dimension = 0;
 			int is_first_elem = true;
@@ -4156,7 +3914,7 @@ func ReadNumberLevelExpression(ParseInput *input)
 				is_first_elem = false;
 			}
 
-			if(dimension != array_type->dimension)
+			if(dimension != array_dimension)
 			{
 				SetError(input, "Incorrect number of array index expressions.");
 			}
@@ -5246,12 +5004,12 @@ func UseExpression(ParseInput *input, Expression *expression)
 		Token name = str_var->name;
 		if(VarExists(var_stack, name))
 		{
-			SetError(input, "Variable already exists.");
+			SetErrorToken(input, "Variable already exists.", name);
 			break;
 		}
 		if(MetaVarExists(meta_var_stack, name))
 		{
-			SetError(input, "A meta variable with this name already exists.");
+			SetErrorToken(input, "A meta variable with this name already exists.", name);
 			break;
 		}
 		
@@ -6086,6 +5844,7 @@ func ReadConstructor(ParseInput *input)
 	return ctor;
 }
 
+// TODO: add error when multiple struct variables have the same name
 static Struct * 
 func ReadStruct(ParseInput *input)
 {
@@ -6389,6 +6148,13 @@ func WriteType(Output *output, VarType *type)
 			}
 			break;
 		}
+		case PointerArrayTypeId:
+		{
+			PointerArrayType *t = (PointerArrayType *)type;
+			WriteType(output, t->element_type);
+			WriteString(output, " *");
+			break;
+		}
 		case EnumTypeId:
 		{
 			EnumType *enum_type = (EnumType *)type;
@@ -6462,6 +6228,7 @@ func WriteIntegerConstantAsType(Output *output, Token token, VarType *type)
 	}
 }
 
+// TODO: replace (*t).a to t->a in C code!
 static void 
 func WriteExpression(Output *output, Expression *expression)
 {
@@ -6597,9 +6364,17 @@ func WriteExpression(Output *output, Expression *expression)
 		case StructVarExpressionId:
 		{
 			StructVarExpression *expr = (StructVarExpression *)expression;
+
+			Assert(output->in_struct == 0);
+			output->in_struct = expr->struct_expression;
+
 			WriteExpression(output, expr->struct_expression);
 			WriteString(output, ".");
 			WriteToken(output, expr->var_name);
+
+			Assert(output->in_struct == expr->struct_expression);
+			output->in_struct = 0;
+
 			break;
 		}
 		case StructDefVarExpressionId:
@@ -6764,14 +6539,66 @@ func WriteExpression(Output *output, Expression *expression)
 			WriteExpression(output, expr->array);
 			WriteString(output, ")");
 
-			ExpressionListElem *index_elem = expr->index_list;
-			while(index_elem)
+			Assert(expr->array->type);
+			if(expr->array->type->id == ArrayTypeId)
 			{
+				ExpressionListElem *index_elem = expr->index_list;
+				while(index_elem)
+				{
+					WriteString(output, "[");
+					WriteExpression(output, index_elem->expr);
+					WriteString(output, "]");
+
+					index_elem = index_elem->next;
+				}
+			}
+			else
+			{
+				// TODO: add a utility function to save in_struct from expression
+				if(expr->array->id == StructVarExpressionId)
+				{
+					StructMetaVarExpression *meta_var_expr = (StructMetaVarExpression *)expr->array;
+					Assert(output->in_struct == 0);
+					output->in_struct = meta_var_expr->struct_expression;
+				}
+
+				Assert(expr->array->type->id == PointerArrayTypeId);
+				ExpressionListElem *index_elem = expr->index_list;
+				PointerArrayType *type = (PointerArrayType *)expr->array->type;
+				ExpressionListElem *dimension_size_elem = type->dimension_size_list;
 				WriteString(output, "[");
-				WriteExpression(output, index_elem->expr);
+				while(index_elem)
+				{
+					WriteString(output, "(");
+					WriteExpression(output, index_elem->expr);
+					WriteString(output, ")");
+
+					ExpressionListElem *size_elem = dimension_size_elem->next;
+					while(size_elem)
+					{
+						WriteString(output, " * (");
+						WriteExpression(output, size_elem->expr);
+						WriteString(output, ")");
+
+						size_elem = size_elem->next;
+					}
+
+					dimension_size_elem = dimension_size_elem->next;
+					index_elem = index_elem->next;
+
+					if(index_elem)
+					{
+						WriteString(output, " + ");
+					}
+				}
 				WriteString(output, "]");
 
-				index_elem = index_elem->next;
+				if(expr->array->id == StructVarExpressionId)
+				{
+					StructMetaVarExpression *meta_var_expr = (StructMetaVarExpression *)expr->array;
+					Assert(output->in_struct == meta_var_expr->struct_expression);
+					output->in_struct = 0;
+				}
 			}
 			break;
 		}
@@ -6844,7 +6671,7 @@ func WriteTypeAndVar(Output *output, VarType *type, Token var_name)
 	}
 	
 	WriteType(output, non_array_type);
-	if(non_array_type->id != PointerTypeId)
+	if(non_array_type->id != PointerTypeId && non_array_type->id != PointerArrayTypeId)
 	{
 		WriteString(output, " ");
 	}

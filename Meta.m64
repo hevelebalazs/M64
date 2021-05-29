@@ -5,19 +5,21 @@ struct Matrix
 	//elems:@Int32;
 
 	#elem_n := row_n * col_n;
-	elems:[10, 10]Int32;
+	//elems:[10, 10]Int32;
+
+	elems:@[row_n, col_n]Int32;
 }
 
 func GetMatrixSum(matrix:@Matrix):UInt32
 {
-	use matrix;
+	// use matrix;
 
 	sum := 0;
-	for row := 0 to < row_n
+	for row := 0 to < matrix.row_n
 	{
-		for col := 0 to < col_n
+		for col := 0 to < matrix.col_n
 		{
-			sum += elems[row, col];
+			sum += matrix.elems[row, col];
 		}
 	}
 	return sum;
