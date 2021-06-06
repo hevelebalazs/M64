@@ -1500,6 +1500,7 @@ struct tdef CodeLine
 	int length;
 };
 
+// TODO: Remove separate stack for different definitions, use linked list?
 struct tdef ParseInput
 {
 	int line_n;
@@ -5664,6 +5665,7 @@ func ReadFunc(ParseInput *input)
 		SetStackState(input, stack_state);
 	}
 
+	Assert(f != 0);
 	return f;
 }
 
@@ -7082,10 +7084,95 @@ func WriteStruct(Output *output, Struct *str)
 	WriteString(output, "};\n");
 }
 
-static void decl ReadAndWriteDefinitions(ParseInput *input, Output *output);
+enum tdef DefinitionId
+{
+	NamespaceDefinitionId,
+	FuncDefinitionId,
+	OperatorDefinitionId,
+	ConstructorDefinitionId,
+	EnumDefinitionId,
+	StructDefinitionId,
+	ForwardDeclarationDefinitionId
+};
 
-static void
-func ReadAndWriteNamespace(ParseInput *input, Output *output)
+struct tdef Definition
+{
+	DefinitionId id;
+};
+
+struct tdef DefinitionList
+{
+	Definition *definition;
+	DefinitionList *next;
+};
+
+struct tdef NamespaceDefinition
+{
+	Definition def;
+
+	Token name;
+	DefinitionList *definitions;
+};
+
+
+// TODO: remove structs Func, Operator, etc. as they are the same as their definitions
+struct tdef FuncDefinition
+{
+	Definition def;
+
+	Func *function;
+};
+
+struct tdef OperatorDefinition
+{
+	Definition def;
+
+	Operator *op;
+};
+
+struct tdef ConstructorDefinition
+{
+	Definition def;
+
+	Constructor *constructor;
+};
+
+struct tdef EnumDefinition
+{
+	Definition def;
+
+	Enum *e;
+};
+
+struct tdef StructDefinition
+{
+	Definition def;
+
+	Struct *str;
+};
+
+struct tdef ForwardDeclarationDefinition
+{
+	Definition def;
+
+	DeclInstruction *decl_instruction;
+};
+
+typedef DefinitionList DefinitionListElem;
+
+static Definition *
+func PushDefinitionUntyped(MemArena *arena, DefinitionId id, size_t size)
+{
+	Definition *def = (Definition *)ArenaPush(arena, size);
+	def->id = id;
+	return def;
+}
+
+#define PushDefinitionTyped(arena, type) (type *)PushDefinitionUntyped(arena, type##Id, sizeof(type))
+
+DefinitionList *func decl ReadDefinitionList(ParseInput *input);
+static NamespaceDefinition *
+func ReadNamespaceDefinition(ParseInput *input)
 {
 	Assert(ReadTokenType(input, NamespaceTokenId));
 	Token name = ReadToken(input);
@@ -7093,7 +7180,6 @@ func ReadAndWriteNamespace(ParseInput *input, Output *output)
 	{
 		SetError(input, "Invalid namespace name.");
 	}
-
 	if(!ReadTokenType(input, OpenBracesTokenId))
 	{
 		SetError(input, "Expected '{' after namespace name.");
@@ -7101,118 +7187,248 @@ func ReadAndWriteNamespace(ParseInput *input, Output *output)
 
 	input->namespace_name = name;
 
-	ReadAndWriteDefinitions(input, output);
+	DefinitionList *definitions = ReadDefinitionList(input);
 
-	if(!ReadTokenType(input, CloseBracesTokenId))
-	{
-		SetError(input, "Expected '}' for namespace.");
-	}
+	NamespaceDefinition *result = PushDefinitionTyped(input->arena, NamespaceDefinition);
+	result->name = name;
+	result->definitions = definitions;
+	return result;
 }
 
-static void
-func ReadAndWriteDefinitions(ParseInput *input, Output *output)
+static FuncDefinition *
+func ReadFuncDefinition(ParseInput *input)
 {
-	bool first = true;
-	while(input->pos->at)
-	{
-		if(PeekToken(input, CloseBracesTokenId))
-		{
-			break;
-		}
+	Func *f = ReadFunc(input);
+	PushFunc(&input->func_stack, f);
 
+	FuncDefinition *result = PushDefinitionTyped(input->arena, FuncDefinition);
+	result->function = f;
+	return result;
+}
+
+static OperatorDefinition *
+func ReadOperatorDefinition(ParseInput *input)
+{
+	Assert(ReadTokenType(input, OperatorTokenId));
+	Operator *op = ReadOperator(input);
+	PushOperator(&input->operator_stack, op);
+
+	OperatorDefinition *result = PushDefinitionTyped(input->arena, OperatorDefinition);
+	result->op = op;
+	return result;
+}
+
+static ConstructorDefinition *
+func ReadConstructorDefinition(ParseInput *input)
+{
+	Assert(ReadTokenType(input, ConstructorTokenId));
+	Constructor *constructor = ReadConstructor(input);
+	PushConstructor(&input->constructor_stack, constructor);
+
+	ConstructorDefinition *result = PushDefinitionTyped(input->arena, ConstructorDefinition);
+	result->constructor = constructor;
+	return result;
+}
+
+static EnumDefinition *
+func ReadEnumDefinition(ParseInput *input)
+{
+	Assert(ReadTokenType(input, EnumTokenId));
+	Enum *e = ReadEnum(input);
+	PushEnum(&input->enum_stack, e);
+
+	EnumDefinition *result = PushDefinitionTyped(input->arena, EnumDefinition);
+	result->e = e;
+	return result;
+}
+
+static StructDefinition *
+func ReadStructDefinition(ParseInput *input)
+{
+	Assert(ReadTokenType(input, StructTokenId));
+	Struct *str = ReadStruct(input);
+	if(HasStruct(&input->struct_stack, str->name))
+	{
+		SetErrorToken(input, "Struct already exists.", str->name);
+	}
+	PushStruct(&input->struct_stack, str);
+
+	StructDefinition *result = PushDefinitionTyped(input->arena, StructDefinition);
+	result->str = str;
+	return result;
+}
+
+static ForwardDeclarationDefinition *
+func ReadForwardDeclarationDefinition(ParseInput *input)
+{
+	Assert(ReadTokenType(input, DeclTokenId));
+	DeclInstruction *decl_instruction = ReadDeclInstruction(input);
+	if(!ReadTokenType(input, SemiColonTokenId))
+	{
+		SetError(input, "Expected ';' after function forward declaration!");
+	}
+
+	Func *f = ArenaPushType(input->arena, Func);
+	f->header = decl_instruction->func_header;
+	f->body = 0;
+	PushFunc(&input->func_stack, f);
+
+	ForwardDeclarationDefinition *result = PushDefinitionTyped(input->arena, ForwardDeclarationDefinition);
+	result->decl_instruction = decl_instruction;
+	return result;
+}
+
+static Definition *
+func ReadDefinition(ParseInput *input)
+{
+	Definition *definition = 0;
+	if(PeekToken(input, NamespaceTokenId))
+	{
+		definition = (Definition *)ReadNamespaceDefinition(input);
+	}
+	else if(PeekToken(input, FuncTokenId))
+	{
+		definition = (Definition *)ReadFuncDefinition(input);
+	}
+	else if(PeekToken(input, OperatorTokenId))
+	{
+		definition = (Definition *)ReadOperatorDefinition(input);
+	}
+	else if(PeekToken(input, ConstructorTokenId))
+	{
+		definition = (Definition *)ReadConstructorDefinition(input);
+	}
+	else if(PeekToken(input, EnumTokenId))
+	{
+		definition = (Definition *)ReadEnumDefinition(input);
+	}
+	else if(PeekToken(input, StructTokenId))
+	{
+		definition = (Definition *)ReadStructDefinition(input);
+	}
+	else if(PeekToken(input, DeclTokenId))
+	{
+		definition = (Definition *)ReadForwardDeclarationDefinition(input);
+	}
+	else
+	{
+		SetError(input, "Invalid definition (expected 'func' or 'struct').");
+	}
+	
+	Assert(definition != 0);
+	return definition;
+}
+
+static DefinitionList *
+func ReadDefinitionList(ParseInput *input)
+{
+	DefinitionListElem *first_elem = 0;
+	DefinitionListElem *last_elem = 0;
+	while(1)
+	{
 		if(PeekToken(input, EndOfFileTokenId))
 		{
 			break;
 		}
 
+		Definition *definition = ReadDefinition(input);
+
+		DefinitionListElem *elem = ArenaPushType(input->arena, DefinitionListElem);
+		elem->next = 0;
+		elem->definition = definition;
+
+		if(!last_elem)
+		{
+			Assert(!first_elem);
+			first_elem = elem;
+			last_elem = elem;
+		}
+		else
+		{
+			Assert(first_elem);
+			last_elem->next = elem;
+			last_elem = elem;
+		}
+	}
+
+	return first_elem;
+}
+
+static void
+func WriteDefinitionList(Output *output, DefinitionList *list)
+{
+	DefinitionListElem *elem = list;
+	bool first = true;
+	while(elem)
+	{
 		if(!first)
 		{
 			WriteString(output, "\n");
 		}
 
-		if(PeekToken(input, NamespaceTokenId))
+		Definition *definition = elem->definition;
+		switch(definition->id)
 		{
-			ReadAndWriteNamespace(input, output);
-		}
-		else if(PeekToken(input, FuncTokenId))
-		{
-			Func *f = ReadFunc(input);
-			PushFunc(&input->func_stack, f);
-			WriteFunc(output, f);
-		}
-		else if(PeekToken(input, OperatorTokenId))
-		{
-			Operator *op = ReadOperator(input);
-			PushOperator(&input->operator_stack, op);
-			WriteOperator(output, op);
-		}
-		else if(PeekToken(input, ConstructorTokenId))
-		{
-			Constructor *ctor = ReadConstructor(input);
-			PushConstructor(&input->constructor_stack, ctor);
-			WriteConstructor(output, ctor);
-		}
-		else if(PeekToken(input, EnumTokenId))
-		{
-			Enum *e = ReadEnum(input);
-			PushEnum(&input->enum_stack, e);
-			WriteEnum(output, e);
-		}
-		else if(PeekToken(input, StructTokenId))
-		{
-			Struct *str = ReadStruct(input);
-			if(HasStruct(&input->struct_stack, str->name))
+			case NamespaceDefinitionId:
 			{
-				SetErrorToken(input, "Struct already exists.", str->name);
+				NamespaceDefinition *def = (NamespaceDefinition *)definition;
+				WriteDefinitionList(output, def->definitions);
+				break;
 			}
-			PushStruct(&input->struct_stack, str);
-			WriteStruct(output, str);
-		}
-		else if(PeekToken(input, DeclTokenId))
-		{
-			DeclInstruction *decl_instruction = ReadDeclInstruction(input);
-			if(!ReadTokenType(input, SemiColonTokenId))
+			case FuncDefinitionId:
 			{
-				SetError(input, "Expected ';' after function forward declaration!");
+				FuncDefinition *def = (FuncDefinition *)definition;
+				WriteFunc(output, def->function);
+				break;
 			}
-
-			Func *f = ArenaPushType(input->arena, Func);
-			f->header = decl_instruction->func_header;
-			f->body = 0;
-			PushFunc(&input->func_stack, f);
-
-			WriteInstruction(output, (Instruction *)decl_instruction);
-			WriteString(output, ";");
+			case OperatorDefinitionId:
+			{
+				OperatorDefinition *def = (OperatorDefinition *)definition;
+				WriteOperator(output, def->op);
+				break;
+			}
+			case ConstructorDefinitionId:
+			{
+				ConstructorDefinition *def = (ConstructorDefinition *)definition;
+				WriteConstructor(output, def->constructor);
+				break;
+			}
+			case EnumDefinitionId:
+			{
+				EnumDefinition *def = (EnumDefinition *)definition;
+				WriteEnum(output, def->e);
+				break;
+			}
+			case StructDefinitionId:
+			{
+				StructDefinition *def = (StructDefinition *)definition;
+				WriteStruct(output, def->str);
+				break;
+			}
+			case ForwardDeclarationDefinitionId:
+			{
+				ForwardDeclarationDefinition *def = (ForwardDeclarationDefinition *)definition;
+				WriteInstruction(output, (Instruction *)def->decl_instruction);
+				WriteString(output, ";");
+				break;
+			}
+			default:
+			{
+				DebugBreak();
+				break;
+			}
 		}
-		else
-		{
-			SetError(input, "Invalid definition (expected 'func' or 'struct').");
-			break;
-		}
-
+		elem = elem->next;
 		first = false;
-	}
-}
-
-static void 
-func ReadAndWriteFile(ParseInput *input, Output *output)
-{
-	ReadAndWriteDefinitions(input, output);
-	Token token = ReadToken(input);
-	if(token.id != EndOfFileTokenId)
-	{
-		Assert(token.id == CloseBracesTokenId);
-		SetError(input, "Unexpected '}', expected end of file.");
 	}
 }
 
 CreateStaticArena(global_arena, 64 * 1024 * 1024);
 
-int 
-func main()
+// *TODO: create a basic interpreter
+static void
+func CompileToCPP(const char *m64_file_name, const char *cpp_file_name)
 {
-	char *m64_file_name = "Meta.m64";
-	char *cpp_file_name = "Meta.hpp";
 	printf("Compiling [%s] to c++ [%s]...\n", m64_file_name, cpp_file_name);
 
 	FILE *m64_file = 0;
@@ -7283,7 +7499,8 @@ func main()
 	CreateStaticArena(out_arena, 64 * 1024);
 	output.arena = &out_arena;
 
-	ReadAndWriteFile(&input, &output);
+	DefinitionList *defs = ReadDefinitionList(&input);
+	WriteDefinitionList(&output, defs);
 
 	for(int i = 0; i < out_arena.used_size; i++)
 	{
@@ -7296,6 +7513,14 @@ func main()
 	printf("Press Enter...\n");
 	char c;
 	scanf_s("%c", &c, 1);
+}
+
+int 
+func main()
+{
+	char *m64_file_name = "Meta.m64";
+	char *cpp_file_name = "Meta.hpp";
+	CompileToCPP(m64_file_name, cpp_file_name);
 
 	return 0;
 }
