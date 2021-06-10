@@ -27,4 +27,9 @@
       <Filter>Resource Files</Filter>
     </None>
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="M64Runtime.hpp">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+  </ItemGroup>
 </Project>

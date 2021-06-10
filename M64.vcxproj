@@ -25,6 +25,9 @@
     <None Include="Meta.m64" />
     <None Include="Test.m64" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="M64Runtime.hpp" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>
     <ProjectGuid>{DF2F1FF0-1713-476E-A08E-A3411192C0D7}</ProjectGuid>

@@ -213,6 +213,7 @@ struct tdef PointerArrayType
 	VarType *element_type;
 };
 
+// TODO: use general VarList instead of this?
 struct tdef FuncParam
 {
 	FuncParam *next;
@@ -7514,6 +7515,8 @@ func CompileToCPP(const char *m64_file_name, const char *cpp_file_name)
 	char c;
 	scanf_s("%c", &c, 1);
 }
+
+#include "M64Runtime.hpp"
 
 int 
 func main()
