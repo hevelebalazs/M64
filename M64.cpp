@@ -7435,22 +7435,19 @@ func WriteDefinitionList(Output *output, DefinitionList *list)
 
 CreateStaticArena(global_arena, 64 * 1024 * 1024);
 
-// *TODO: create a basic interpreter
-static void
-func CompileToCPP(const char *m64_file_name, const char *cpp_file_name)
+static DefinitionList *
+func ReadDefinitionListFromFile(const char *file_name)
 {
-	printf("Compiling [%s] to c++ [%s]...\n", m64_file_name, cpp_file_name);
-
-	FILE *m64_file = 0;
-	fopen_s(&m64_file, m64_file_name, "r");
-	Assert(m64_file != 0);
+	FILE *file = 0;
+	fopen_s(&file, file_name, "r");
+	Assert(file != 0);
 
 	int code_index = 0;
 	while(1)
 	{
 		Assert(code_index < MaxCodeSize - 1);
 		char c;
-		int res = fscanf_s(m64_file, "%c", &c, 1);
+		int res = fscanf_s(file, "%c", &c, 1);
 		if(res != 1)
 		{
 			break;
@@ -7462,13 +7459,9 @@ func CompileToCPP(const char *m64_file_name, const char *cpp_file_name)
 		}
 	}
 
-	fclose(m64_file);
+	fclose(file);
 
 	Assert(code_index < MaxCodeSize - 1);
-
-	FILE *cpp_file = 0;
-	fopen_s(&cpp_file, cpp_file_name, "w");
-	Assert(cpp_file != 0);
 
 	CodePosition pos = {};
 	pos.at = global_code_buffer;
@@ -7505,20 +7498,36 @@ func CompileToCPP(const char *m64_file_name, const char *cpp_file_name)
 
 	ReadCodeLines(&input);
 
+	DefinitionList *defs = ReadDefinitionList(&input);
+	return defs;
+}
+
+static void
+func WriteDefinitionListToFile(DefinitionList *defs, const char *file_name)
+{
 	Output output = {};
 	CreateStaticArena(out_arena, 64 * 1024);
 	output.arena = &out_arena;
-
-	DefinitionList *defs = ReadDefinitionList(&input);
 	WriteDefinitionList(&output, defs);
 
+	FILE *file = 0;
+	fopen_s(&file, file_name, "w");
+	Assert(file != 0);
 	for(int i = 0; i < out_arena.used_size; i++)
 	{
-		int res = fprintf(cpp_file, "%c", out_arena.memory[i]);
+		int res = fprintf(file, "%c", out_arena.memory[i]);
 		Assert(res == 1);
 	}
+	fclose(file);
+}
 
-	fclose(cpp_file);
+static void
+func CompileToCPP(const char *m64_file_name, const char *cpp_file_name)
+{
+	printf("Compiling [%s] to c++ [%s]...\n", m64_file_name, cpp_file_name);
+
+	DefinitionList *defs = ReadDefinitionListFromFile(m64_file_name);
+	WriteDefinitionListToFile(defs, cpp_file_name);
 
 	printf("Press Enter...\n");
 	char c;
