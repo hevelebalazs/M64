@@ -1,3 +1,3 @@
 Debug/*
-*.hpp
+Samples/*.hpp
 .vs/*

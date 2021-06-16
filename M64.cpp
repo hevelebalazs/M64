@@ -160,6 +160,15 @@ struct tdef BaseType
 	BaseVarTypeId base_id;
 };
 
+static BaseType
+func CreateBaseType(BaseVarTypeId id)
+{
+	BaseType result = {};
+	result.type.id = BaseTypeId;
+	result.base_id = id;
+	return result;
+}
+
 struct tdef PointerType
 {
 	VarType type;
@@ -7521,8 +7530,8 @@ func CompileToCPP(const char *m64_file_name, const char *cpp_file_name)
 int 
 func main()
 {
-	char *m64_file_name = "Meta.m64";
-	char *cpp_file_name = "Meta.hpp";
+	char *m64_file_name = "Samples/Meta.m64";
+	char *cpp_file_name = "Samples/Meta.hpp";
 	CompileToCPP(m64_file_name, cpp_file_name);
 
 	return 0;
