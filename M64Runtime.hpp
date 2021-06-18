@@ -1,10 +1,10 @@
-struct Value
+struct tdef Value
 {
 	VarType *type;
 	void *address;
 };
 
-struct ValueListElem
+struct tdef ValueListElem
 {
 	ValueListElem *next;
 
@@ -40,6 +40,22 @@ func AddRuntimeVar(Runtime *runtime, Token name, Value *value)
 	runtime->var_n++;
 }
 
+static RuntimeVar *
+func GetRuntimeVar(Runtime *runtime, Token name)
+{
+	RuntimeVar *result = 0;
+	for(int i = 0; i < runtime->var_n; i++)
+	{
+		RuntimeVar *var = &runtime->vars[i];
+		if(TokensEqual(var->name, name))
+		{
+			result = var;
+			break;
+		}
+	}
+	return result;
+}
+
 static char *
 func StackAlloc(Runtime *runtime, int size)
 {
@@ -57,6 +73,7 @@ func StackPush(Runtime *runtime, int size, char *value)
 	{
 		mem[i] = value[i];
 	}
+	return mem;
 }
 
 #define StackAllocType(runtime, T) (T *)StackAlloc(runtime, sizeof(T))
@@ -103,7 +120,7 @@ func ExecuteExpression(Runtime *runtime, Expression *expression)
 				case Int32BaseTypeId:
 				{
 					int value = *(int *)left_address + *(int*)right_address;
-					// result = PushInt32Value(runtime, value);
+					result = PushInt32Value(runtime, value);
 					break;
 				}
 				default:
@@ -113,6 +130,51 @@ func ExecuteExpression(Runtime *runtime, Expression *expression)
 			}
 
 			break;
+		}
+		case ProductExpressionId:
+		{
+			AddExpression *expr = (AddExpression *)expression;
+			Value *left = ExecuteExpression(runtime, expr->left);
+			Value *right = ExecuteExpression(runtime, expr->right);
+
+			void *left_address = left->address;
+			void *right_address = right->address;
+
+			Assert(left && right);
+			Assert(TypesEqual(left->type, right->type));
+			VarType *type = left->type;
+			Assert(IsNumericalType(type));
+
+			Assert(type->id == BaseTypeId);
+			BaseType *base_type = (BaseType *)type;
+
+			switch(base_type->base_id)
+			{
+				case Int32BaseTypeId:
+				{
+					int value = (*(int *)left_address) * (*(int*)right_address);
+					result = PushInt32Value(runtime, value);
+					break;
+				}
+				default:
+				{
+					DebugBreak();
+				}
+			}
+
+			break;
+		}
+		case VarExpressionId:
+		{
+			VarExpression *expr = (VarExpression *)expression;
+			RuntimeVar *var = GetRuntimeVar(runtime, expr->var.name);
+			Assert(var);
+			result = var->value;
+			break;
+		}
+		default:
+		{
+			DebugBreak();
 		}
 		/*
 		AddressExpressionId,
@@ -141,7 +203,6 @@ func ExecuteExpression(Runtime *runtime, Expression *expression)
 		OperatorCallExpressionId,
 		OrExpressionId,
 		ParenExpressionId,
-		ProductExpressionId,
 		RealConstantExpressionId,
 		RightShiftExpressionId,
 		StringConstantExpressionId,
@@ -150,7 +211,6 @@ func ExecuteExpression(Runtime *runtime, Expression *expression)
 		StructMetaVarExpressionId,
 		SubtractExpressionId,
 		TernaryOperatorExpressionId,
-		VarExpressionId,
 		*/
 	}
 
@@ -166,13 +226,23 @@ func ExecuteInstruction(Runtime *runtime, Instruction *instruction)
 		{
 			break;
 		}
+		case CreateVariableInstructionId:
+		{
+			CreateVariableInstruction *instr = (CreateVariableInstruction *)instruction;
+			Value *value = ExecuteExpression(runtime, instr->init);
+			AddRuntimeVar(runtime, instr->var_name, value);
+			break;
+		}
+		default:
+		{
+			DebugBreak();
+		}
 		/*
 		AssignInstructionId,
 		BlockInstructionId,
 		BreakInstructionId,
 		ContinueInstructionId,
 		CreateMetaVariableInstructionId,
-		CreateVariableInstructionId,
 		DeclInstructionId,
 		DecrementInstructionId,
 		ElseInstructionId,
@@ -278,6 +348,37 @@ func GetFuncByName(DefinitionList *defs, char *name)
 }
 
 static void
+func PrintValue(Value *value)
+{
+	VarType *type = value->type;
+	switch(type->id)
+	{
+		case BaseTypeId:
+		{
+			BaseType *base_type = (BaseType *)type;
+			switch(base_type->base_id)
+			{
+				case Int32BaseTypeId:
+				{
+					int val = *(int *)value->address;
+					printf("%i", val);
+					break;
+				}
+				default:
+				{
+					DebugBreak();
+				}
+			}
+			break;
+		}
+		default:
+		{
+			DebugBreak();
+		}
+	}
+}
+
+static void
 func TestRuntime(DefinitionList *defs)
 {
 	Runtime runtime = CreateRuntime(&runtime_arena);
@@ -286,5 +387,11 @@ func TestRuntime(DefinitionList *defs)
 	Func *function = GetFuncByName(defs, "SquareInt");
 	Assert(function);
 	Value *result = ExecuteFunction(&runtime, function, param);
-	// PrintValue(result);
+	printf("Value = ");
+	PrintValue(result);
+	printf("\n");
+
+	printf("Press Enter...\n");
+	char c;
+	scanf_s("%c", &c, 1);
 }

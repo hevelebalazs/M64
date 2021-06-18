@@ -7539,9 +7539,15 @@ func CompileToCPP(const char *m64_file_name, const char *cpp_file_name)
 int 
 func main()
 {
+#if 0
 	char *m64_file_name = "Samples/Meta.m64";
 	char *cpp_file_name = "Samples/Meta.hpp";
 	CompileToCPP(m64_file_name, cpp_file_name);
+#endif
+
+	char *test_file_name = "Samples/Meta.m64";
+	DefinitionList *defs = ReadDefinitionListFromFile(test_file_name);
+	TestRuntime(defs);
 
 	return 0;
 }
