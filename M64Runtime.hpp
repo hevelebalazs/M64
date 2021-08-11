@@ -378,11 +378,13 @@ func PrintValue(Value *value)
 	}
 }
 
+// TODO: create a way to open a window and show texture generated in M64 code!
+// TODO: command line interaction?
 static void
 func TestRuntime(DefinitionList *defs)
 {
 	Runtime runtime = CreateRuntime(&runtime_arena);
-	Value *value = PushInt32Value(&runtime, 10);
+	Value *value = PushInt32Value(&runtime, 5);
 	ValueListElem *param = PushValueListElem(&runtime, value);
 	Func *function = GetFuncByName(defs, "SquareInt");
 	Assert(function);
