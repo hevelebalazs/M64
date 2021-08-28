@@ -1,0 +1,52 @@
+#iterate IterateRailEndsOnePerLine(city: @City) : RailElemEnd
+{
+	#define HandleEnd(end: RailElemEnd)
+	{
+		other_end := GetOppositeRailEnd(end);
+		if end.ptr < other_end.ptr
+		{
+			#yield end;
+		}
+	}
+
+	for segment: @ in city.segments
+	{
+		if segment.connection1.type == NoRailElem
+		{
+			HandleEnd(RailSegmentEnd(segment, 1));
+		}
+		if segment.connection2.type == NoRailElem
+		{
+			HandleEnd(RailSegmentEnd(segment, 2));
+		}
+	}
+
+	for curve: @ in city.curves
+	{
+		if curve.connection1.type == NoRailElem
+		{
+			HandleEnd(RailCurveEnd(curve, 1));
+		}
+		if curve.connection2.type == NoRailElem
+		{
+			HandleEnd(RailCurveEnd(curve, 2));
+		}
+	}
+}
+
+#for IterateRailEndsOnePerLine(city)
+{
+	runtime.train_n++;
+}
+
+runtime.trains = AllocArray(arena, Train, runtime.train_n);
+
+train_n := 0;
+#for end1: in IterateRailEndsOnePerLine(city)
+{
+	train := AddTrainFromEnd(end1);
+	Assert(train_n < runtime.train_n);
+	runtime.trains[train_n] = train;
+	train_n++;
+}
+Assert(train_n == runtime.train_n);
