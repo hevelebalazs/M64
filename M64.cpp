@@ -7536,9 +7536,11 @@ func CompileToCPP(const char *m64_file_name, const char *cpp_file_name)
 
 #include "M64Runtime.hpp"
 
+CreateStaticArena(runtime_bitmap_arena, 64 * 1024 * 1024);
+
 int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int cmd_show)
 {
-	TestWindowsRuntime(instance);
+	TestWindowsRuntime(instance, &runtime_bitmap_arena);
 
 	return 0;
 }

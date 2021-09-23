@@ -379,19 +379,65 @@ func PrintValue(Value *value)
 }
 
 // *TODO: create a way to open a window and show texture generated in M64 code!
-//	*show a Windows window
-//  -show texture
+//	+show a Windows window
+//  *show texture
 //  -generate texture in interpreted M64 code
 // TODO: command line interaction?
 
+struct Bitmap
+{
+	int width;
+	int height;
+	unsigned int *memory;
+	MemArena *arena;
+};
+
+static Bitmap global_bitmap;
 static bool global_running;
 
-LRESULT CALLBACK WinCallback(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
+static BITMAPINFO 
+func GetBitmapInfo(Bitmap *bitmap)
+{
+	BITMAPINFO info = {};
+	BITMAPINFOHEADER *header = &info.bmiHeader;
+	header->biSize = sizeof(*header);
+	header->biWidth = bitmap->width;
+	header->biHeight = -bitmap->height;
+	header->biPlanes = 1;
+	header->biBitCount = 32;
+	header->biCompression = BI_RGB;
+	return info;
+}
+
+static void 
+func ResizeBitmap(Bitmap *bitmap, int width, int height)
+{
+	bitmap->width = width;
+	bitmap->height = height;
+
+	bitmap->arena->used_size = 0;
+	bitmap->memory = ArenaPushArray(bitmap->arena, width * height, unsigned int);
+}
+
+static LRESULT CALLBACK 
+func WinCallback(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
 {
 	LRESULT result = 0;
 
 	switch(message)
 	{
+		case WM_SIZE:
+		{
+			RECT rect = {};
+			GetClientRect(window, &rect);
+
+			int width = rect.right - rect.left;
+			int height = rect.bottom - rect.top;
+
+			ResizeBitmap(&global_bitmap, width, height);
+
+			break;
+		}
 		case WM_DESTROY:
 		case WM_CLOSE:
 		{
@@ -408,23 +454,30 @@ LRESULT CALLBACK WinCallback(HWND window, UINT message, WPARAM wparam, LPARAM lp
 	return result;
 }
 
-void WinDraw(HWND window, HDC context)
+static void 
+func Draw(Bitmap *bitmap)
 {
-	RECT rect;
-	GetClientRect(window, &rect);
-
-	HBRUSH brush = CreateSolidBrush(RGB(255, 0, 0));
-
-	FillRect(context, &rect, brush);
+	int id = 0;
+	for(int row = 0; row < bitmap->height; row++)
+	{
+		for(int col = 0; col < bitmap->width; col++)
+		{
+			bitmap->memory[id] = 0xFF0000FF;
+			id++;
+		}
+	}
 }
 
-void TestWindowsRuntime(HINSTANCE instance)
+static void 
+func TestWindowsRuntime(HINSTANCE instance, MemArena *arena)
 {
 	WNDCLASS wc = {};
 	wc.style = CS_OWNDC;
 	wc.lpfnWndProc = WinCallback;
 	wc.hInstance = instance;
 	wc.lpszClassName = "Test";
+
+	global_bitmap.arena = arena;
 
 	ATOM res = RegisterClass(&wc);
 	Assert(res);
@@ -457,7 +510,26 @@ void TestWindowsRuntime(HINSTANCE instance)
 			break;
 		}
 
-		WinDraw(window, context);
+		Bitmap *bitmap = &global_bitmap;
+		Draw(bitmap);
+
+		BITMAPINFO bitmap_info = GetBitmapInfo(bitmap);
+
+		RECT rect = {};
+		GetClientRect(window, &rect);
+		int width = rect.right - rect.left;
+		int height = rect.bottom - rect.top;
+
+		HDC context = GetDC(window);
+		StretchDIBits(context,
+					  0, 0, bitmap->width, bitmap->height,
+					  0, 0, width, height,
+					  bitmap->memory,
+					  &bitmap_info,
+					  DIB_RGB_COLORS,
+					  SRCCOPY
+		);
+		ReleaseDC(window, context);
 	}
 }
 
