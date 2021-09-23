@@ -378,8 +378,91 @@ func PrintValue(Value *value)
 	}
 }
 
-// TODO: create a way to open a window and show texture generated in M64 code!
+// *TODO: create a way to open a window and show texture generated in M64 code!
+//	*show a Windows window
+//  -show texture
+//  -generate texture in interpreted M64 code
 // TODO: command line interaction?
+
+static bool global_running;
+
+LRESULT CALLBACK WinCallback(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
+{
+	LRESULT result = 0;
+
+	switch(message)
+	{
+		case WM_DESTROY:
+		case WM_CLOSE:
+		{
+			global_running = false;
+			break;
+		}
+		default:
+		{
+			result = DefWindowProc(window, message, wparam, lparam);
+			break;
+		}
+	}
+
+	return result;
+}
+
+void WinDraw(HWND window, HDC context)
+{
+	RECT rect;
+	GetClientRect(window, &rect);
+
+	HBRUSH brush = CreateSolidBrush(RGB(255, 0, 0));
+
+	FillRect(context, &rect, brush);
+}
+
+void TestWindowsRuntime(HINSTANCE instance)
+{
+	WNDCLASS wc = {};
+	wc.style = CS_OWNDC;
+	wc.lpfnWndProc = WinCallback;
+	wc.hInstance = instance;
+	wc.lpszClassName = "Test";
+
+	ATOM res = RegisterClass(&wc);
+	Assert(res);
+
+	HWND window = CreateWindowEx(
+		0,
+		wc.lpszClassName,
+		"Test",
+		WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+		CW_USEDEFAULT, CW_USEDEFAULT,
+		CW_USEDEFAULT, CW_USEDEFAULT,
+		0, 0, instance, 0
+	);
+	Assert(window);
+
+	HDC context = GetDC(window);
+	MSG message = {};
+
+	global_running = true;
+	while(global_running)
+	{
+		BOOL result = GetMessageA(&message, 0, 0, 0);
+		if(result > 0)
+		{
+			TranslateMessage(&message);
+			DispatchMessage(&message);
+		}
+		else
+		{
+			break;
+		}
+
+		WinDraw(window, context);
+	}
+}
+
+
+/*
 static void
 func TestRuntime(DefinitionList *defs)
 {
@@ -397,3 +480,4 @@ func TestRuntime(DefinitionList *defs)
 	char c;
 	scanf_s("%c", &c, 1);
 }
+*/

@@ -7536,6 +7536,14 @@ func CompileToCPP(const char *m64_file_name, const char *cpp_file_name)
 
 #include "M64Runtime.hpp"
 
+int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int cmd_show)
+{
+	TestWindowsRuntime(instance);
+
+	return 0;
+}
+
+/*
 int 
 func main()
 {
@@ -7551,3 +7559,4 @@ func main()
 
 	return 0;
 }
+*/
