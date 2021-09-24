@@ -133,6 +133,7 @@ enum tdef VarTypeId
 	PointerTypeId,
 	StructTypeId,
 	ArrayTypeId,
+	// TODO: shouldn't it be called ArrayPointer?
 	PointerArrayTypeId,
 	EnumTypeId
 };
@@ -176,11 +177,21 @@ struct tdef PointerType
 	VarType *pointed_type;
 };
 
+static PointerType
+func CreatePointerType(VarType *pointed_type)
+{
+	PointerType result = {};
+	result.type.id = PointerTypeId;
+	result.pointed_type = pointed_type;
+	return result;
+}
+
 struct tdef StructVar
 {
 	StructVar *next;
 	VarType *type;
 	Token name;
+	int address_offset;
 };
 
 struct decl Expression;
@@ -1112,6 +1123,67 @@ struct tdef EnumType
 
 	Enum *e;
 };
+
+// TODO: use size_t or something typedef'd for sizes, not int!
+static int
+func GetTypeByteSize(VarType *type)
+{
+	int size = 0;
+
+	Assert(type);
+	switch(type->id)
+	{
+		case StructTypeId:
+		{
+			StructType *t = (StructType *)type;
+
+			Struct *str = t->str;
+			Assert(str);
+
+			StructVar *var = str->first_var;
+			while(var)
+			{
+				size += GetTypeByteSize(var->type);
+				var = var->next;
+			}
+
+			break;
+		};
+		case PointerTypeId:
+		case PointerArrayTypeId:
+		{
+			size = 4;
+			break;
+		}
+		case BaseTypeId:
+		{
+			BaseType *t = (BaseType *)type;
+			switch(t->base_id)
+			{
+				case Int8BaseTypeId:
+				case UInt8BaseTypeId:
+				{
+					size = 1;
+					break;
+				}
+				case Int32BaseTypeId:
+				case UInt32BaseTypeId:
+				case Real32BaseTypeId:
+				case Bool32BaseTypeId:
+				{
+					size = 4;
+					break;
+				}
+				default:
+				{
+					DebugBreak();
+				}
+			}
+		};
+	}
+
+	return size;
+}
 
 // TODO: handle 0 parameters
 static bool 
@@ -5880,6 +5952,7 @@ func ReadStruct(ParseInput *input)
 
 	StructVar *last_var = 0;
 	StructMetaVar *last_meta_var = 0;
+	int address_offset = 0;
 	while(true)
 	{
 		if(ReadTokenType(input, CloseBracesTokenId))
@@ -5974,6 +6047,9 @@ func ReadStruct(ParseInput *input)
 				var->next = 0;
 				var->name = var_name_list.names[i];
 				var->type = var_type;
+				var->address_offset = address_offset;
+
+				address_offset += GetTypeByteSize(var_type);
 
 				if(!last_var)
 				{
@@ -7243,7 +7319,6 @@ func ReadConstructorDefinition(ParseInput *input)
 static EnumDefinition *
 func ReadEnumDefinition(ParseInput *input)
 {
-	Assert(ReadTokenType(input, EnumTokenId));
 	Enum *e = ReadEnum(input);
 	PushEnum(&input->enum_stack, e);
 
@@ -7255,7 +7330,6 @@ func ReadEnumDefinition(ParseInput *input)
 static StructDefinition *
 func ReadStructDefinition(ParseInput *input)
 {
-	Assert(ReadTokenType(input, StructTokenId));
 	Struct *str = ReadStruct(input);
 	if(HasStruct(&input->struct_stack, str->name))
 	{
@@ -7536,11 +7610,15 @@ func CompileToCPP(const char *m64_file_name, const char *cpp_file_name)
 
 #include "M64Runtime.hpp"
 
+// TODO: move this into M64Runtime.hpp!
 CreateStaticArena(runtime_bitmap_arena, 64 * 1024 * 1024);
 
 int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int cmd_show)
 {
-	TestWindowsRuntime(instance, &runtime_bitmap_arena);
+	char *test_file_name = "Samples/Test.m64";
+	DefinitionList *defs = ReadDefinitionListFromFile(test_file_name);
+
+	TestWindowsRuntime(instance, &runtime_bitmap_arena, defs);
 
 	return 0;
 }
