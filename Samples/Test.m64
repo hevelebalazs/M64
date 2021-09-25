@@ -8,15 +8,72 @@ struct Bitmap
 	// pixels[row][col];
 }
 
-func ClearBitmapToColor(bitmap:@Bitmap, color:UInt32)
+struct V4
 {
+	x, y, z, w: Real32;
+	#r := x;
+	#g := y;
+	#b := z;
+	#a := w;
+}
+
+func Color(r, g, b: Real32): V4
+{
+	color: V4;
+	color.r = r;
+	color.g = g;
+	color.b = b;
+	color.a = 1;
+	return color;
+}
+
+func ColorToColorCode(color: V4): UInt32
+{
+	r := UInt32(color.r * 255);
+	g := UInt32(color.g * 255);
+	b := UInt32(color.b * 255);
+	a := UInt32(color.a * 255);
+
+	code := (a << 24) + (r << 16) + (g << 8) + (b << 0);
+	return code;
+}
+
+func ClearBitmapToColor(bitmap: @Bitmap, color: V4)
+{
+	code := ColorToColorCode(color);
+
 	use bitmap;
 	for row := 0 to < height
 	{
 		for col := 0 to < width
 		{
 			#pixel := (pixels + width * row + col)@;
-			pixel = color;
+			pixel = code;
+		}
+	}
+}
+
+func FloatDiv(a, b: Int32): Real32
+{
+	r := Real32(a) / Real32(b);
+	return r;
+}
+
+func DrawGradient(bitmap: @Bitmap)
+{
+	use bitmap;
+	for row := 0 to < height
+	{
+		row_ratio := FloatDiv(row, height - 1);
+		for col := 0 to < width
+		{
+			col_ratio := FloatDiv(col, width - 1);
+
+			color := Color(row_ratio, col_ratio, 0);
+			color_code := ColorToColorCode(color);
+
+			#pixel := (pixels + width * row + col)@;
+			pixel = color_code;
 		}
 	}
 }
@@ -28,5 +85,6 @@ func Draw(memory: @UInt32, width, height: Int32)
 	bitmap.height = height;
 	bitmap.pixels = memory;
 
-	ClearBitmapToColor(@bitmap, 0xFFFF00FF);
+	DrawGradient(@bitmap);
+	// ClearBitmapToColor(@bitmap, color);
 }

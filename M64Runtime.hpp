@@ -106,6 +106,8 @@ static BaseType Int32Type = CreateBaseType(Int32BaseTypeId);
 static BaseType UInt32Type = CreateBaseType(UInt32BaseTypeId);
 static PointerType UInt32PointerType = CreatePointerType(&UInt32Type.type);
 
+static BaseType Real32Type = CreateBaseType(Real32BaseTypeId);
+
 // TODO: is it possible to not allocate Value structures on stack?
 
 static Value *
@@ -144,6 +146,15 @@ func PushUInt32Value(Runtime *runtime, unsigned int value)
 	return result;
 }
 
+static Value *
+func PushReal32Value(Runtime *runtime, float value)
+{
+	Value *result = StackAllocType(runtime, Value);
+	result->type = (VarType* )&Real32Type;
+	result->address = StackPushVar(runtime, float, value);
+	return result;
+}
+
 typedef long long I64;
 
 static Value *
@@ -160,6 +171,11 @@ func PushIntegerConstantValue(Runtime *runtime, I64 value, BaseVarTypeId base_ty
 		case UInt32BaseTypeId:
 		{
 			result = PushUInt32Value(runtime, (unsigned int)value);
+			break;
+		}
+		case Real32BaseTypeId:
+		{
+			result = PushReal32Value(runtime, (float)value);
 			break;
 		}
 		default:
@@ -358,6 +374,91 @@ func OffsetPointer(void *base, int offset)
 	return result;
 }
 
+decl static Value *ExecuteExpression(Runtime *runtime, Expression *expression);
+
+static Value *
+func ExecuteStructMetaExpression(Runtime *runtime, Expression *str, Expression *expression)
+{
+	Value *result = 0;
+	switch(expression->id)
+	{
+		case StructDefVarExpressionId:
+		{
+			StructDefVarExpression *e = (StructDefVarExpression *)expression;
+
+			Assert(str->type->id == StructTypeId);
+			StructType *struct_type = (StructType *)str->type;
+			Assert(struct_type->str == e->struct_def);
+
+			StructVar *var = GetStructVar(e->struct_def, e->var_name);
+
+			StructVarExpression expr = {};
+			expr.expr.id = StructVarExpressionId;
+			expr.expr.is_const = str->is_const;
+			expr.expr.has_final_type = str->has_final_type;
+			expr.expr.type = var->type;
+			expr.struct_expression = str;
+			expr.var_name = e->var_name;
+
+			result = ExecuteExpression(runtime, (Expression *)&expr);
+			break;
+		}
+		default:
+		{
+			result = ExecuteExpression(runtime, expression);
+			break;
+		}
+	}
+
+	return result;
+}
+
+static Value *
+func PushCastValueToType(Runtime *runtime, Value *from, VarType *type)
+{
+	Value *result = 0;
+	Assert(type->id == BaseTypeId);
+	Assert(from->type->id == BaseTypeId);
+	BaseType *base_type = (BaseType *)type;
+	BaseType *from_base_type = (BaseType *)from->type;
+	switch(base_type->base_id)
+	{
+		case UInt32BaseTypeId:
+		{
+			unsigned int value = 0;
+			switch(from_base_type->base_id)
+			{
+				case Real32BaseTypeId:
+				{
+					value = (unsigned int)(*(float *)from->address);
+					break;
+				}
+			}
+
+			result = PushUInt32Value(runtime, value);
+			break;
+		}
+		case Real32BaseTypeId:
+		{
+			float value = 0;
+			switch(from_base_type->base_id)
+			{
+				case Int32BaseTypeId:
+				{
+					value = (float)(*(int *)from->address);
+					break;
+				}
+			}
+
+			result = PushReal32Value(runtime, value);
+			break;
+		}
+	}
+
+	Assert(result);
+	return result;
+}
+
 static Value *
 func ExecuteExpression(Runtime *runtime, Expression *expression)
 {
@@ -392,21 +493,24 @@ func ExecuteExpression(Runtime *runtime, Expression *expression)
 			Value *left = ExecuteExpression(runtime, expr->left);
 			Value *right = ExecuteExpression(runtime, expr->right);
 
-			void *left_address = left->address;
-			void *right_address = right->address;
-
-			Assert(left && right);
 			if(TypesEqual(left->type, right->type))
 			{
-				VarType *type = left->type;
-				Assert(IsNumericalType(type));
+				Assert(left->type->id == BaseTypeId);
+				
+				BaseType *base_type = (BaseType *)left->type;
 
-				switch(type->id)
+				switch(base_type->base_id)
 				{
 					case Int32BaseTypeId:
 					{
-						int value = *(int *)left_address + *(int*)right_address;
+						int value = *(int *)left->address + *(int*)right->address;
 						result = PushInt32Value(runtime, value);
+						break;
+					}
+					case UInt32BaseTypeId:
+					{
+						unsigned int value = *(unsigned int *)left->address + *(unsigned int *)right->address;
+						result = PushUInt32Value(runtime, value);
 						break;
 					}
 					default:
@@ -430,14 +534,58 @@ func ExecuteExpression(Runtime *runtime, Expression *expression)
 
 			break;
 		}
+		case SubtractExpressionId:
+		{
+			SubtractExpression *expr = (SubtractExpression *)expression;
+			Value *left = ExecuteExpression(runtime, expr->left);
+			Value *right = ExecuteExpression(runtime, expr->right);
+
+			if(TypesEqual(left->type, right->type))
+			{
+				Assert(left->type->id == BaseTypeId);
+				
+				BaseType *base_type = (BaseType *)left->type;
+
+				switch(base_type->base_id)
+				{
+					case Int32BaseTypeId:
+					{
+						int value = *(int *)left->address - *(int*)right->address;
+						result = PushInt32Value(runtime, value);
+						break;
+					}
+					case UInt32BaseTypeId:
+					{
+						unsigned int value = *(unsigned int *)left->address - *(unsigned int *)right->address;
+						result = PushUInt32Value(runtime, value);
+						break;
+					}
+					default:
+					{
+						DebugBreak();
+					}
+				}
+			}
+			else
+			{
+				Assert(IsPointerType(left->type));
+				Assert(IsIntegerType(right->type));
+
+				VarType *pointed_type = ((PointerType *)left->type)->pointed_type;
+				int increment_size = GetTypeByteSize(pointed_type);
+
+				I64 increment = ValueToI64(right);
+				void *address = OffsetPointer(*(void **)left->address, -(int)(increment_size * increment));
+				result = PushPointerValue(runtime, left->type, address);
+			}
+
+			break;
+		}
 		case ProductExpressionId:
 		{
 			AddExpression *expr = (AddExpression *)expression;
 			Value *left = ExecuteExpression(runtime, expr->left);
 			Value *right = ExecuteExpression(runtime, expr->right);
-
-			void *left_address = left->address;
-			void *right_address = right->address;
 
 			Assert(left && right);
 			Assert(TypesEqual(left->type, right->type));
@@ -451,8 +599,99 @@ func ExecuteExpression(Runtime *runtime, Expression *expression)
 			{
 				case Int32BaseTypeId:
 				{
-					int value = (*(int *)left_address) * (*(int*)right_address);
+					int value = (*(int *)left->address) * (*(int*)right->address);
 					result = PushInt32Value(runtime, value);
+					break;
+				}
+				case Real32BaseTypeId:
+				{
+					float value = (*(float *)left->address) * (*(float *)right->address);
+					result = PushReal32Value(runtime, value);
+					break;
+				}
+				default:
+				{
+					DebugBreak();
+				}
+			}
+
+			break;
+		}
+		case DivideExpressionId:
+		{
+			DivideExpression *expr = (DivideExpression *)expression;
+			Value *left = ExecuteExpression(runtime, expr->left);
+			Value *right = ExecuteExpression(runtime, expr->right);
+
+			Assert(left && right);
+			Assert(TypesEqual(left->type, right->type));
+			VarType *type = left->type;
+			Assert(IsNumericalType(type));
+
+			Assert(type->id == BaseTypeId);
+			BaseType *base_type = (BaseType *)type;
+
+			switch(base_type->base_id)
+			{
+				case Int32BaseTypeId:
+				{
+					int value = (*(int *)left->address) / (*(int*)right->address);
+					result = PushInt32Value(runtime, value);
+					break;
+				}
+				case Real32BaseTypeId:
+				{
+					float value = (*(float *)left->address) / (*(float *)right->address);
+					result = PushReal32Value(runtime, value);
+					break;
+				}
+				default:
+				{
+					DebugBreak();
+				}
+			}
+
+			break;
+		}
+		case LeftShiftExpressionId:
+		{
+			LeftShiftExpression *e = (LeftShiftExpression *)expression;
+			Value *left = ExecuteExpression(runtime, e->left);
+			Value *right = ExecuteExpression(runtime, e->right);
+
+			Assert(left->type->id == BaseTypeId);
+			Assert(right->type->id == BaseTypeId);
+
+			BaseType *left_base = (BaseType *)left->type;
+			BaseType *right_base = (BaseType *)right->type;
+			switch(left_base->base_id)
+			{
+				case UInt32BaseTypeId:
+				{
+					unsigned int val = *(unsigned int *)left->address;
+
+					switch(right_base->base_id)
+					{
+						case Int32BaseTypeId:
+						{
+							int val2 = *(int *)right->address;
+							val <<= val2;
+							break;
+						}
+						case UInt32BaseTypeId:
+						{
+							unsigned int val2 = *(int *)right->address;
+							val <<= val2;
+							break;
+						}
+						default:
+						{
+							DebugBreak();
+						}
+					}
+
+					result = PushUInt32Value(runtime, val);
+
 					break;
 				}
 				default:
@@ -517,6 +756,14 @@ func ExecuteExpression(Runtime *runtime, Expression *expression)
 		{
 			MetaVarExpression *e = (MetaVarExpression *)expression;
 			result = ExecuteExpression(runtime, e->var.expression);
+
+			break;
+		}
+		case StructMetaVarExpressionId:
+		{
+			StructMetaVarExpression *e = (StructMetaVarExpression *)expression;
+
+			result = ExecuteStructMetaExpression(runtime, e->struct_expression, e->meta_expression);
 
 			break;
 		}
@@ -595,6 +842,16 @@ func ExecuteExpression(Runtime *runtime, Expression *expression)
 
 			result->type = pointer_type->pointed_type;
 			result->address = *(void **)base->address;
+
+			break;
+		}
+		case CastExpressionId:
+		{
+			CastExpression *e = (CastExpression *)expression;
+
+			Value *from = ExecuteExpression(runtime, e->expression);
+
+			result = PushCastValueToType(runtime, from, e->type);
 
 			break;
 		}
@@ -828,6 +1085,18 @@ func ExecuteFunction(Runtime *runtime, Func *function, ValueList *param_values)
 
 	runtime->stack_state = stack_state;
 
+	if(return_value && return_value->type)
+	{
+		VarType *type = return_value->type;
+		int size = GetTypeByteSize(type);
+		void *address = StackAlloc(runtime, size);
+		Copy(address, return_value->address, size);
+
+		return_value = StackAllocType(runtime, Value);
+		return_value->type = type;
+		return_value->address = address;
+	}
+
 	return return_value;
 }
 
@@ -899,12 +1168,6 @@ func PrintValue(Value *value)
 		}
 	}
 }
-
-// *TODO: create a way to open a window and show texture generated in M64 code!
-//	+show a Windows window
-//  *show texture
-//  -generate texture in interpreted M64 code
-// TODO: command line interaction?
 
 struct Bitmap
 {
