@@ -2,10 +2,7 @@ struct Bitmap
 {
 	width: Int32;
 	height: Int32;
-
-	pixels:@UInt32;
-	// use pixels:@[height, width]UInt32;
-	// pixels[row][col];
+	pixels:@[height, width]UInt32;
 }
 
 struct V4
@@ -42,13 +39,21 @@ func ClearBitmapToColor(bitmap: @Bitmap, color: V4)
 {
 	code := ColorToColorCode(color);
 
+	/*
+	for row, col: in bitmap.pixels
+	{
+		...
+	}
+	*/
+
 	use bitmap;
 	for row := 0 to < height
 	{
 		for col := 0 to < width
 		{
-			#pixel := (pixels + width * row + col)@;
-			pixel = code;
+			// #pixel := (pixels + width * row + col)@;
+			// pixel = code;
+			pixels[row, col] = code;
 		}
 	}
 }
@@ -72,8 +77,9 @@ func DrawGradient(bitmap: @Bitmap)
 			color := Color(row_ratio, col_ratio, 0);
 			color_code := ColorToColorCode(color);
 
-			#pixel := (pixels + width * row + col)@;
-			pixel = color_code;
+			// #pixel := (pixels + width * row + col)@;
+			// pixel = color_code;
+			pixels[row, col] = color_code;
 		}
 	}
 }

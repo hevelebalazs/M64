@@ -2649,6 +2649,8 @@ func GetMatchingType(VarType *type1, VarType *type2)
 			type = (priority1 < priority2) ? type1 : type2;
 		}
 	}
+
+	Assert(type);
 	return type;
 }
 
@@ -2833,13 +2835,43 @@ func MatchExpressionWithType(ParseInput *input, Expression *expr, VarType *type)
 }
 
 static bool
+func TypesMatch(VarType *type1, VarType *type2)
+{
+	bool match = false;
+	if(TypesEqual(type1, type2))
+	{
+		match = true;
+	}
+	else
+	{
+		if(type1->id == PointerArrayTypeId && type2->id == PointerTypeId)
+		{
+			PointerArrayType *t1 = (PointerArrayType *)type1;
+			PointerType *t2 = (PointerType *)type2;
+
+			match = TypesMatch(t1->element_type, t2->pointed_type);
+		}
+	}
+
+	return match;
+}
+
+static bool
 func MatchExpressionTypes(ParseInput *input, Expression *expr1, Expression *expr2)
 {
 	Assert(expr1 != 0 && expr2 != 0);
-	VarType *type = GetMatchingType(expr1->type, expr2->type);
-	bool match1 = MatchExpressionWithType(input, expr1, type);
-	bool match2 = MatchExpressionWithType(input, expr2, type);
-	bool match = (match1 && match2);
+	bool match = false;
+	if(TypesMatch(expr1->type, expr2->type))
+	{
+		match = true;
+	}
+	else
+	{
+		VarType *type = GetMatchingType(expr1->type, expr2->type);
+		bool match1 = MatchExpressionWithType(input, expr1, type);
+		bool match2 = MatchExpressionWithType(input, expr2, type);
+		match = (match1 && match2);
+	}
 	return match;
 }
 

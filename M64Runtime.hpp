@@ -1,6 +1,9 @@
+// TODO: create a virtual machine if there are performance issues
+
 struct tdef Value
 {
 	VarType *type;
+	Value *meta_struct;
 	void *address;
 };
 
@@ -34,6 +37,8 @@ struct tdef Runtime
 
 	RuntimeVar *vars;
 	int max_var_n;
+
+	Value *meta_struct;
 
 	RuntimeStackState stack_state;
 };
@@ -374,45 +379,6 @@ func OffsetPointer(void *base, int offset)
 	return result;
 }
 
-decl static Value *ExecuteExpression(Runtime *runtime, Expression *expression);
-
-static Value *
-func ExecuteStructMetaExpression(Runtime *runtime, Expression *str, Expression *expression)
-{
-	Value *result = 0;
-	switch(expression->id)
-	{
-		case StructDefVarExpressionId:
-		{
-			StructDefVarExpression *e = (StructDefVarExpression *)expression;
-
-			Assert(str->type->id == StructTypeId);
-			StructType *struct_type = (StructType *)str->type;
-			Assert(struct_type->str == e->struct_def);
-
-			StructVar *var = GetStructVar(e->struct_def, e->var_name);
-
-			StructVarExpression expr = {};
-			expr.expr.id = StructVarExpressionId;
-			expr.expr.is_const = str->is_const;
-			expr.expr.has_final_type = str->has_final_type;
-			expr.expr.type = var->type;
-			expr.struct_expression = str;
-			expr.var_name = e->var_name;
-
-			result = ExecuteExpression(runtime, (Expression *)&expr);
-			break;
-		}
-		default:
-		{
-			result = ExecuteExpression(runtime, expression);
-			break;
-		}
-	}
-
-	return result;
-}
-
 static Value *
 func PushCastValueToType(Runtime *runtime, Value *from, VarType *type)
 {
@@ -725,7 +691,6 @@ func ExecuteExpression(Runtime *runtime, Expression *expression)
 			if(used_from)
 			{
 				Value *used_value = ExecuteExpression(runtime, used_from);
-
 				void *base_address = used_value->address;
 				
 				VarType *type = used_from->type;
@@ -744,6 +709,7 @@ func ExecuteExpression(Runtime *runtime, Expression *expression)
 				result = StackAllocType(runtime, Value);
 				result->type = var->type;
 				result->address = OffsetPointer(base_address, var->address_offset);
+				result->meta_struct = used_value;
 			}
 			else
 			{
@@ -763,7 +729,12 @@ func ExecuteExpression(Runtime *runtime, Expression *expression)
 		{
 			StructMetaVarExpression *e = (StructMetaVarExpression *)expression;
 
-			result = ExecuteStructMetaExpression(runtime, e->struct_expression, e->meta_expression);
+			Value *meta_struct = runtime->meta_struct;
+
+			runtime->meta_struct = ExecuteExpression(runtime, e->struct_expression);
+			result = ExecuteExpression(runtime, e->meta_expression);
+
+			runtime->meta_struct = meta_struct;
 
 			break;
 		}
@@ -783,6 +754,34 @@ func ExecuteExpression(Runtime *runtime, Expression *expression)
 			result = StackAllocType(runtime, Value);
 			result->type = var->type;
 			result->address = (void *)((char *)str->address + var->address_offset);
+			break;
+		}
+		case StructDefVarExpressionId:
+		{
+			Assert(runtime->meta_struct);
+			StructDefVarExpression *e = (StructDefVarExpression *)expression;
+
+			VarType *meta_type = runtime->meta_struct->type;
+			void *meta_address = runtime->meta_struct->address;
+
+			if(meta_type->id == PointerTypeId)
+			{
+				PointerType *pointer_type = (PointerType *)meta_type;
+				meta_type = pointer_type->pointed_type;
+
+				meta_address = *(void **)meta_address;
+			}
+
+			Assert(meta_type->id == StructTypeId);
+			StructType *struct_type = (StructType *)meta_type;
+			Assert(struct_type->str == e->struct_def);
+
+			StructVar *var = GetStructVar(e->struct_def, e->var_name);
+
+			result = StackAllocType(runtime, Value);
+			result->type = var->type;
+			result->address = OffsetPointer(meta_address, var->address_offset);
+
 			break;
 		}
 		case FuncCallExpressionId:
@@ -852,6 +851,66 @@ func ExecuteExpression(Runtime *runtime, Expression *expression)
 			Value *from = ExecuteExpression(runtime, e->expression);
 
 			result = PushCastValueToType(runtime, from, e->type);
+
+			break;
+		}
+		case ArrayIndexExpressionId:
+		{
+			Value *meta_struct = runtime->meta_struct;
+
+			ArrayIndexExpression *e = (ArrayIndexExpression *)expression;
+
+			Value *array = ExecuteExpression(runtime, e->array);
+
+			runtime->meta_struct = array->meta_struct;
+
+			ExpressionListElem *dimension_size_elem = 0;
+			VarType *elem_type = 0;
+			void *array_address = 0;
+			if(array->type->id == ArrayTypeId)
+			{
+				ArrayType *t = (ArrayType *)array->type;
+				dimension_size_elem = t->dimension_size_list;
+				elem_type = t->element_type;
+				array_address = array->address;
+			}
+			else if(array->type->id == PointerArrayTypeId)
+			{
+				PointerArrayType *t = (PointerArrayType *)array->type;
+				dimension_size_elem = t->dimension_size_list;
+				elem_type = t->element_type;
+				array_address = *(void **)array->address;
+			}
+			else
+			{
+				DebugBreak();
+			}
+
+			int offset = 0;
+			ExpressionListElem *index = e->index_list;
+			while(index)
+			{
+				Value *dimension = ExecuteExpression(runtime, dimension_size_elem->expr);
+				
+				I64 dimension_val = ValueToI64(dimension);
+				offset *= (int)dimension_val;
+
+				Value *val = ExecuteExpression(runtime, index->expr);
+				I64 index_val = ValueToI64(val);
+				offset += (int)index_val;
+				
+				dimension_size_elem = dimension_size_elem->next;
+				index = index->next;
+			}
+
+			int elem_size = GetTypeByteSize(elem_type);
+			offset *= elem_size;
+
+			result = StackAllocType(runtime, Value);
+			result->type = elem_type;
+			result->address = OffsetPointer(array_address, offset);
+
+			runtime->meta_struct = meta_struct;
 
 			break;
 		}
@@ -946,7 +1005,7 @@ func ExecuteInstruction(Runtime *runtime, Instruction *instruction)
 
 			Value *left = ExecuteExpression(runtime, i->left);
 			Value *right = ExecuteExpression(runtime, i->right);
-			Assert(TypesEqual(left->type, right->type));
+			Assert(TypesMatch(left->type, right->type));
 
 			int size = GetTypeByteSize(left->type);
 			Copy(left->address, right->address, size);
