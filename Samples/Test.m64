@@ -5,6 +5,16 @@ struct Bitmap
 	pixels:@[height, width]UInt32;
 }
 
+struct State
+{
+	offset: Int32;
+}
+
+func InitState(state: @State)
+{
+	state.offset = 0;
+}
+
 struct V4
 {
 	x, y, z, w: Real32;
@@ -35,62 +45,48 @@ func ColorToColorCode(color: V4): UInt32
 	return code;
 }
 
-func ClearBitmapToColor(bitmap: @Bitmap, color: V4)
-{
-	code := ColorToColorCode(color);
-
-	/*
-	for row, col: in bitmap.pixels
-	{
-		...
-	}
-	*/
-
-	use bitmap;
-	for row := 0 to < height
-	{
-		for col := 0 to < width
-		{
-			// #pixel := (pixels + width * row + col)@;
-			// pixel = code;
-			pixels[row, col] = code;
-		}
-	}
-}
-
 func FloatDiv(a, b: Int32): Real32
 {
 	r := Real32(a) / Real32(b);
 	return r;
 }
 
-func DrawGradient(bitmap: @Bitmap)
+func DrawGradient(bitmap: @Bitmap, state: @State)
 {
 	use bitmap;
+	// for row, col: in pixels
 	for row := 0 to < height
 	{
 		row_ratio := FloatDiv(row, height - 1);
 		for col := 0 to < width
 		{
-			col_ratio := FloatDiv(col, width - 1);
+			col1 := col + state.offset;
+			if col1 >= width
+			{
+				col1 -= width;
+			}
+			col_ratio := FloatDiv(col1, width - 1);
 
 			color := Color(row_ratio, col_ratio, 0);
 			color_code := ColorToColorCode(color);
 
-			// #pixel := (pixels + width * row + col)@;
-			// pixel = color_code;
 			pixels[row, col] = color_code;
 		}
 	}
 }
 
-func Draw(memory: @UInt32, width, height: Int32)
+func Draw(memory: @UInt32, width, height: Int32, state: @State)
 {
 	bitmap: Bitmap;
 	bitmap.width = width;
 	bitmap.height = height;
 	bitmap.pixels = memory;
 
-	DrawGradient(@bitmap);
-	// ClearBitmapToColor(@bitmap, color);
+	state.offset++;
+	if state.offset >= width
+	{
+		state.offset = 0;
+	}
+
+	DrawGradient(@bitmap, state);
 }

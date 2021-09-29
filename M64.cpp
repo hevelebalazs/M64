@@ -209,6 +209,8 @@ struct tdef Struct
 	Token namespace_name;
 	StructVar *first_var;
 	StructMetaVar *first_meta_var;
+
+	VarType *type;
 };
 
 // TODO: allow [i][j] style array indexing for [size0,size1] arrays?
@@ -2590,12 +2592,13 @@ func ReadVarType(ParseInput *input)
 			Struct *str = GetStruct(&input->struct_stack, input->last_token);
 			if(str)
 			{
-				type = (VarType *)PushStructType(input->arena, str);
+				type = str->type;
 			}
 
 			Enum *e = GetEnum(&input->enum_stack, input->last_token);
 			if(e)
 			{
+				// TODO: Add VarType to Enum struct!
 				type = (VarType *)PushEnumType(input->arena, e);
 			}
 		}
@@ -2935,7 +2938,7 @@ func GetType(ParseInput *input, Token name)
 		Struct *str = GetStruct(&input->struct_stack, name);
 		if(str)
 		{
-			type = (VarType *)PushStructType(input->arena, str);
+			type = str->type;
 		}
 	}
 	return type;
@@ -5932,7 +5935,7 @@ func ReadConstructor(ParseInput *input)
 	{
 		SetError(input, "Invalid struct name in constructor definition.");
 	}
-	VarType *type = (VarType *)PushStructType(input->arena, str);
+	VarType *type = str->type;
 
 	if(header.return_type)
 	{
@@ -6101,6 +6104,8 @@ func ReadStruct(ParseInput *input)
 
 	result->name = name;
 	result->namespace_name = input->namespace_name;
+
+	result->type = (VarType *)PushStructType(input->arena, result);
 
 	input->in_struct_definition = 0;
 

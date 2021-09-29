@@ -681,6 +681,19 @@ func ExecuteExpression(Runtime *runtime, Expression *expression)
 
 			break;
 		}
+		case GreaterThanOrEqualToExpressionId:
+		{
+			GreaterThanOrEqualToExpression *e = (GreaterThanOrEqualToExpression *)expression;
+			Value *left = ExecuteExpression(runtime, e->left);
+			Value *right = ExecuteExpression(runtime, e->right);
+
+			I64 left_value = ValueToI64(left);
+			I64 right_value = ValueToI64(right);
+
+			result = PushBool32Value(runtime, left_value >= right_value);
+
+			break;
+		}
 		case VarExpressionId:
 		{
 			VarExpression *e = (VarExpression *)expression;
@@ -1020,6 +1033,31 @@ func ExecuteInstruction(Runtime *runtime, Instruction *instruction)
 
 			break;
 		}
+		case IfInstructionId:
+		{
+			IfInstruction *i = (IfInstruction *)instruction;
+
+			Value *condition = ExecuteExpression(runtime, i->condition);
+			Assert(condition->type->id == BaseTypeId);
+			BaseType *base_type = (BaseType *)condition->type;
+			Assert(base_type->base_id == Bool32BaseTypeId);
+
+			bool value = *(bool *)condition->address;
+			if(value)
+			{
+				RuntimeStackState stack_state = runtime->stack_state;
+				BlockInstruction *body = i->body;
+				Instruction *instruction = body->first;
+				while(instruction)
+				{
+					ExecuteInstruction(runtime, instruction);
+					instruction = instruction->next;
+				}
+				runtime->stack_state = stack_state;
+			}
+
+			break;
+		}
 		case ForInstructionId:
 		{
 			RuntimeStackState stack_state = runtime->stack_state;
@@ -1041,7 +1079,6 @@ func ExecuteInstruction(Runtime *runtime, Instruction *instruction)
 
 				BlockInstruction *body = i->body;
 				Instruction *instruction = body->first;
-
 
 				bool did_break = false;
 				while(instruction)
@@ -1090,6 +1127,40 @@ func ExecuteInstruction(Runtime *runtime, Instruction *instruction)
 			I64 val = ValueToI64(value);
 			val++;
 			I64ToValue(value, val);
+
+			break;
+		}
+		case MinusEqualsInstructionId:
+		{
+			MinusEqualsInstruction *i = (MinusEqualsInstruction *)instruction;
+			Value *left = ExecuteExpression(runtime, i->left);
+			Value *right = ExecuteExpression(runtime, i->right);
+
+			Assert(TypesEqual(left->type, right->type));
+
+			VarType *type = left->type;
+			Assert(type->id == BaseTypeId);
+
+			BaseType *base_type = (BaseType *)type;
+
+			switch(base_type->base_id)
+			{
+				case Int32BaseTypeId:
+				{
+					int left_v = *(int *)left->address;
+					int right_v = *(int *)right->address;
+
+					left_v -= right_v;
+
+					*(int *)left->address = left_v;
+
+					break;
+				}
+				default:
+				{
+					DebugBreak();
+				}
+			}
 
 			break;
 		}
@@ -1228,7 +1299,7 @@ func PrintValue(Value *value)
 	}
 }
 
-struct Bitmap
+struct tdef Bitmap
 {
 	int width;
 	int height;
@@ -1298,11 +1369,38 @@ func WinCallback(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
 	return result;
 }
 
-struct WindowTest
+struct tdef WindowTest
 {
 	Runtime runtime;
 	Func *draw_func;
+	Value state_value;
 };
+
+static VarType *
+func GetStructTypeByName(DefinitionList *defs, char *name)
+{
+	VarType *result = 0;
+
+	DefinitionListElem *elem = defs;
+	while(elem)
+	{
+		Definition *def = elem->definition;
+
+		if(def->id == StructDefinitionId)
+		{
+			StructDefinition *d = (StructDefinition *)def;
+			if(TokenEquals(d->str->name, name))
+			{
+				result = d->str->type;
+				break;
+			}
+		}
+
+		elem = elem->next;
+	}
+
+	return result;
+}
 
 static WindowTest
 func CreateWindowTest(DefinitionList *defs, MemArena *arena)
@@ -1310,6 +1408,32 @@ func CreateWindowTest(DefinitionList *defs, MemArena *arena)
 	WindowTest test = {};
 	test.runtime = CreateRuntime(arena);
 	test.draw_func = GetFuncByName(defs, "Draw");
+
+	VarType *type = GetStructTypeByName(defs, "State");
+	Assert(type);
+
+	// *TODO: get VarType for pointer to State from function definition parameter!!
+	Func *init_func = GetFuncByName(defs, "InitState");
+	FuncHeader header = init_func->header;
+	FuncParam *param = header.first_param;
+	Assert(param);
+	VarType *state_pointer_type = param->type;
+	Assert(state_pointer_type->id == PointerTypeId);
+
+	int type_size = GetTypeByteSize(type);
+
+	void *struct_address = StackAlloc(&test.runtime, type_size);
+
+	test.state_value.type = state_pointer_type;
+	test.state_value.address = StackPush(&test.runtime, sizeof(void *), (char *)&struct_address);
+
+	RuntimeStackState stack_state = test.runtime.stack_state;
+	ValueListElem *elem = PushValueListElem(&test.runtime, &test.state_value);
+
+	ExecuteFunction(&test.runtime, init_func, elem);
+
+	test.runtime.stack_state = stack_state;
+
 	Assert(test.draw_func);
 	return test;
 }
@@ -1327,10 +1451,12 @@ func Draw(Bitmap *bitmap, WindowTest *test)
 		// Maybe create a RuntimeFuncParams struct?
 	ValueListElem *memory_elem = PushValueListElem(runtime, memory_value);
 	ValueListElem *width_elem = PushValueListElem(runtime, width_value);
-	ValueListElem *height_elem= PushValueListElem(runtime, height_value);
+	ValueListElem *height_elem = PushValueListElem(runtime, height_value);
+	ValueListElem *state_elem = PushValueListElem(runtime, &test->state_value);
 
 	memory_elem->next = width_elem;
 	width_elem->next = height_elem;
+	height_elem->next = state_elem;
 
 	ExecuteFunction(runtime, test->draw_func, memory_elem);
 }
