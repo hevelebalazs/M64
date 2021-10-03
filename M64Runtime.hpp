@@ -419,6 +419,21 @@ func PushCastValueToType(Runtime *runtime, Value *from, VarType *type)
 				result = PushUInt32Value(runtime, value);
 				break;
 			}
+			case Int32BaseTypeId:
+			{
+				unsigned int value = 0;
+				switch(from_base_type->base_id)
+				{
+					case UInt32BaseTypeId:
+					{
+						value = (int)(*(unsigned int *)from->address);
+						break;
+					}
+				}
+
+				result = PushInt32Value(runtime, value);
+				break;
+			}
 			case Real32BaseTypeId:
 			{
 				float value = 0;
@@ -434,6 +449,10 @@ func PushCastValueToType(Runtime *runtime, Value *from, VarType *type)
 				result = PushReal32Value(runtime, value);
 				break;
 			}
+			default:
+			{
+				DebugBreak();
+			}
 		}
 	}
 	else if(from->type->id == PointerTypeId)
@@ -441,6 +460,10 @@ func PushCastValueToType(Runtime *runtime, Value *from, VarType *type)
 		Assert(type->id == PointerTypeId);
 
 		result = PushPointerValue(runtime, type, *(void **)from->address);
+	}
+	else
+	{
+		DebugBreak();
 	}
 
 	Assert(result);
@@ -700,6 +723,19 @@ func ExecuteExpression(Runtime *runtime, Expression *expression)
 			I64 right_value = ValueToI64(right);
 
 			result = PushBool32Value(runtime, left_value < right_value);
+
+			break;
+		}
+		case GreaterThanExpressionId:
+		{
+			GreaterThanExpression *e = (GreaterThanExpression *)expression;
+			Value *left = ExecuteExpression(runtime, e->left);
+			Value *right = ExecuteExpression(runtime, e->right);
+
+			I64 left_value = ValueToI64(left);
+			I64 right_value = ValueToI64(right);
+
+			result = PushBool32Value(runtime, left_value > right_value);
 
 			break;
 		}
@@ -1152,6 +1188,20 @@ func ExecuteInstruction(Runtime *runtime, Instruction *instruction)
 
 			break;
 		}
+		case DecrementInstructionId:
+		{
+			DecrementInstruction *i = (DecrementInstruction *)instruction;
+
+			Value *value = ExecuteExpression(runtime, i->expression);
+
+			Assert(IsPointerType(value->type) || IsNumericalType(value->type));
+
+			I64 val = ValueToI64(value);
+			val--;
+			I64ToValue(value, val);
+
+			break;
+		}
 		case PlusEqualsInstructionId:
 		{
 			PlusEqualsInstruction *i = (PlusEqualsInstruction *)instruction;
@@ -1405,6 +1455,8 @@ struct tdef WindowTest
 	Runtime runtime;
 	Func *draw_func;
 	Value state_value;
+	int mouse_x;
+	int mouse_y;
 };
 
 static VarType *
@@ -1511,6 +1563,8 @@ func Draw(Bitmap *bitmap, WindowTest *test)
 	Value *width_value = PushInt32Value(runtime, bitmap->width);
 	Value *height_value = PushInt32Value(runtime, bitmap->height);
 	Value *memory_value = PushInt8PointerValue(runtime, render_arena.memory);
+	Value *mouse_x_value = PushInt32Value(runtime, test->mouse_x);
+	Value *mouse_y_value = PushInt32Value(runtime, test->mouse_y);
 
 	// TODO: create helper functions for this
 		// Maybe create a RuntimeFuncParams struct?
@@ -1518,10 +1572,14 @@ func Draw(Bitmap *bitmap, WindowTest *test)
 	ValueListElem *height_elem = PushValueListElem(runtime, height_value);
 	ValueListElem *memory_elem = PushValueListElem(runtime, memory_value);
 	ValueListElem *state_elem = PushValueListElem(runtime, &test->state_value);
+	ValueListElem *mouse_x_elem = PushValueListElem(runtime, mouse_x_value);
+	ValueListElem *mouse_y_elem = PushValueListElem(runtime, mouse_y_value);
 
 	width_elem->next = height_elem;
 	height_elem->next = memory_elem;
 	memory_elem->next = state_elem;
+	state_elem->next = mouse_x_elem;
+	mouse_x_elem->next = mouse_y_elem;
 
 	ExecuteFunction(runtime, test->draw_func, width_elem);
 
@@ -1566,6 +1624,13 @@ func TestWindowsRuntime(HINSTANCE instance, MemArena *arena, DefinitionList *def
 			TranslateMessage(&message);
 			DispatchMessage(&message);
 		}
+
+		POINT point = {};
+		GetCursorPos(&point);
+		ScreenToClient(window, &point);
+
+		test.mouse_x = point.x;
+		test.mouse_y = point.y;
 
 		Bitmap *bitmap = &global_bitmap;
 		Draw(bitmap, &test);

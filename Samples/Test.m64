@@ -1,11 +1,13 @@
 struct State
 {
-	offset: Int32;
+	x, y: Int32;
 }
 
 func InitState(state: @State)
 {
-	state.offset = 0;
+	use state;
+	x = 0;
+	y = 0;
 }
 
 struct V4
@@ -79,16 +81,16 @@ func WriteUInt32(writer: @MemoryWriter, v: UInt32)
 }
 
 /*
-	TODO: write a meta func that takes multiple parameters
-	Write(w, minx, maxx, miny, maxy, color);
+TODO: write a meta func that takes multiple parameters
+Write(w, minx, maxx, miny, maxy, color);
 
-	#func Write(w: @MemoryWrite, params: #ParamList)
+#func Write(w: @MemoryWrite, params: #ParamList)
+{
+	#for p := in params
 	{
-		#for p := in params
-		{
-			WriteValue(w, p.value);
-		}
+		WriteValue(w, p.value);
 	}
+}
 */
 
 func StopRender(w: @MemoryWriter)
@@ -108,7 +110,8 @@ func RenderRect(w: @MemoryWriter, minx, maxx, miny, maxy: Int32, color: V4)
 	WriteUInt32(w, color_code);
 }
 
-func Draw(width, height: Int32, render_memory:@Int8, state: @State)
+// TODO: follow mouse
+func Draw(width, height: Int32, render_memory:@Int8, state: @State, mouse_x, mouse_y: Int32)
 {
 	w: MemoryWriter;
 	w.at = render_memory;
@@ -118,14 +121,18 @@ func Draw(width, height: Int32, render_memory:@Int8, state: @State)
 
 	use state;
 
-	rect_color := Color(0, 0, 1);
-	RenderRect(@w, offset, offset + 50, 100, 150, rect_color);
+	// TODO: make sure type gets inferred properly
+	// radius := 25;
+	radius := :Int32(25);
 
-	offset++;
-	if offset >= width
-	{
-		offset = 0;
-	}
+	rect_color := Color(0, 0, 1);
+	RenderRect(@w, x - radius, x + radius, y - radius, y + radius, rect_color);
+
+	if x < mouse_x { x++; }
+	if x > mouse_x { x--; }
+
+	if y < mouse_y { y++; }
+	if y > mouse_y { y--; }
 
 	StopRender(@w);
 }

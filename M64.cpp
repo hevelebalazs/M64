@@ -2875,7 +2875,17 @@ func MatchExpressionTypes(ParseInput *input, Expression *expr1, Expression *expr
 		{
 			bool match1 = MatchExpressionWithType(input, expr1, type);
 			bool match2 = MatchExpressionWithType(input, expr2, type);
+
 			match = (match1 && match2);
+			if(match &&expr1->has_final_type && !expr2->has_final_type)
+			{
+				expr2->has_final_type = true;
+			}
+			if(match && expr2->has_final_type && !expr1->has_final_type)
+			{
+				expr1->has_final_type = true;
+			}
+
 		}
 	}
 	return match;
@@ -5148,6 +5158,7 @@ func UseExpression(ParseInput *input, Expression *expression)
 		Var var = {};
 		var.name = str_var->name;
 		var.type = str_var->type;
+		var.has_final_type = true;
 		var.use_from = expression;
 		PushVar(var_stack, var);
 
