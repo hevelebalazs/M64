@@ -2653,7 +2653,6 @@ func GetMatchingType(VarType *type1, VarType *type2)
 		}
 	}
 
-	Assert(type);
 	return type;
 }
 
@@ -2682,6 +2681,7 @@ func CanMatchExpressionWithType(Expression *expr, VarType *type)
 static bool 
 func MatchExpressionWithType(ParseInput *input, Expression *expr, VarType *type)
 {
+	Assert(type);
 	bool can_match = false;
 	if(TypesEqual(expr->type, type))
 	{
@@ -2871,9 +2871,12 @@ func MatchExpressionTypes(ParseInput *input, Expression *expr1, Expression *expr
 	else
 	{
 		VarType *type = GetMatchingType(expr1->type, expr2->type);
-		bool match1 = MatchExpressionWithType(input, expr1, type);
-		bool match2 = MatchExpressionWithType(input, expr2, type);
-		match = (match1 && match2);
+		if(type)
+		{
+			bool match1 = MatchExpressionWithType(input, expr1, type);
+			bool match2 = MatchExpressionWithType(input, expr2, type);
+			match = (match1 && match2);
+		}
 	}
 	return match;
 }
@@ -2957,6 +2960,10 @@ func CanCastTypeTo(VarType *type_from, VarType *type_to)
 {
 	bool can_cast = false;
 	if(IsNumericalType(type_from) && IsNumericalType(type_to))
+	{
+		can_cast = true;
+	}
+	if(IsPointerType(type_from) && IsPointerType(type_to))
 	{
 		can_cast = true;
 	}
@@ -3796,6 +3803,29 @@ func ReadNumberLevelExpression(ParseInput *input)
 
 		expr = (Expression *)PushAddressExpression(input->arena, addressed_expression);
 	}
+	else if(ReadTokenType(input, ColonTokenId))
+	{
+		VarType *type = ReadVarType(input);
+		Assert(type);
+
+		if(!ReadTokenType(input, OpenParenTokenId))
+		{
+			SetError(input, "Expected '(' after var type (for casting).");
+		}
+
+		Expression *expression = ReadExpression(input);
+		if(expression == 0 || !CanCastTypeTo(expression->type, type))
+		{
+			SetError(input, "Cannot cast type of expression.");
+		}
+
+		if(!ReadTokenType(input, CloseParenTokenId))
+		{
+			SetError(input, "Expected ')' after expression (for casting).");
+		}
+
+		expr = (Expression *)PushCastExpression(input->arena, type, expression);
+	}
 	else if(ReadTokenType(input, NameTokenId))
 	{
 		Token name = input->last_token;
@@ -3893,23 +3923,7 @@ func ReadNumberLevelExpression(ParseInput *input)
 			}
 			else
 			{
-				if(!ReadTokenType(input, OpenParenTokenId))
-				{
-					SetError(input, "Expected '(' after var type (for casting).");
-				}
-
-				Expression *expression = ReadExpression(input);
-				if(expression == 0 || !CanCastTypeTo(expression->type, type))
-				{
-					SetError(input, "Cannot cast type of expression.");
-				}
-
-				if(!ReadTokenType(input, CloseParenTokenId))
-				{
-					SetError(input, "Expected ')' after expression (for casting).");
-				}
-
-				expr = (Expression *)PushCastExpression(input->arena, type, expression);
+				SetError(input, "Unexpected typename, expected expression.");
 			}
 		}
 		else if(input->in_struct_definition)
@@ -5567,14 +5581,19 @@ func ReadInstruction(ParseInput *input)
 				SetError(input, "Expected expression after '+='.");
 			}
 
-			if(!MatchExpressionTypes(input, expression, right))
+			bool types_match = false;
+			if(IsPointerType(expression->type) && IsIntegerType(right->type))
 			{
-				SetError(input, "Unmatching types for '+=' instruction.");
+				types_match = true;
+			}
+			else if(MatchExpressionTypes(input, expression, right))
+			{
+				types_match = true;
 			}
 
-			if(!IsNumericalType(expression->type))
+			if(!types_match)
 			{
-				SetError(input, "Expected numerical expression before '+='.");
+				SetError(input, "Unmatching types for '+=' instruction.");
 			}
 
 			PlusEqualsInstruction *plus_equals = ArenaPushType(input->arena, PlusEqualsInstruction);

@@ -31,5 +31,8 @@
     <ClInclude Include="M64Runtime.hpp">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="BitmapRender.hpp">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

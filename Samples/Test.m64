@@ -1,10 +1,3 @@
-struct Bitmap
-{
-	width: Int32;
-	height: Int32;
-	pixels:@[height, width]UInt32;
-}
-
 struct State
 {
 	offset: Int32;
@@ -36,10 +29,10 @@ func Color(r, g, b: Real32): V4
 
 func ColorToColorCode(color: V4): UInt32
 {
-	r := UInt32(color.r * 255);
-	g := UInt32(color.g * 255);
-	b := UInt32(color.b * 255);
-	a := UInt32(color.a * 255);
+	r := :UInt32(color.r * 255);
+	g := :UInt32(color.g * 255);
+	b := :UInt32(color.b * 255);
+	a := :UInt32(color.a * 255);
 
 	code := (a << 24) + (r << 16) + (g << 8) + (b << 0);
 	return code;
@@ -47,46 +40,92 @@ func ColorToColorCode(color: V4): UInt32
 
 func FloatDiv(a, b: Int32): Real32
 {
-	r := Real32(a) / Real32(b);
+	r := :Real32(a) / :Real32(b);
 	return r;
 }
 
-func DrawGradient(bitmap: @Bitmap, state: @State)
+// TODO: create a general pointer type that's like void *
+struct MemoryWriter
 {
-	use bitmap;
-	// for row, col: in pixels
-	for row := 0 to < height
-	{
-		row_ratio := FloatDiv(row, height - 1);
-		for col := 0 to < width
-		{
-			col1 := col + state.offset;
-			if col1 >= width
-			{
-				col1 -= width;
-			}
-			col_ratio := FloatDiv(col1, width - 1);
-
-			color := Color(row_ratio, col_ratio, 0);
-			color_code := ColorToColorCode(color);
-
-			pixels[row, col] = color_code;
-		}
-	}
+	at:@Int8;
 }
 
-func Draw(memory: @UInt32, width, height: Int32, state: @State)
-{
-	bitmap: Bitmap;
-	bitmap.width = width;
-	bitmap.height = height;
-	bitmap.pixels = memory;
+/*
+TODO: make a meta func for writing any value
 
-	state.offset++;
-	if state.offset >= width
+#func WriteValue(writer: @MemoryWriter, v: #Value)
+{
+	use writer;
+	#type := v.type;
+	:@type(at)@ = v;
+	at += #TypeSize(type);
+}
+*/
+
+func WriteInt32(writer: @MemoryWriter, v: Int32)
+{
+	use writer;
+	:@Int32(at)@ = v;
+	at += 4;
+}
+
+// TODO: use function param
+// func WriteUInt32(use writer: @MemoryWriter, v: UInt32)
+func WriteUInt32(writer: @MemoryWriter, v: UInt32)
+{
+	use writer;
+	:@UInt32(at)@ = v;
+	at += 4;
+}
+
+/*
+	TODO: write a meta func that takes multiple parameters
+	Write(w, minx, maxx, miny, maxy, color);
+
+	#func Write(w: @MemoryWrite, params: #ParamList)
 	{
-		state.offset = 0;
+		#for p := in params
+		{
+			WriteValue(w, p.value);
+		}
+	}
+*/
+
+func StopRender(w: @MemoryWriter)
+{
+	WriteInt32(w, 0);
+}
+
+func RenderRect(w: @MemoryWriter, minx, maxx, miny, maxy: Int32, color: V4)
+{
+	color_code := ColorToColorCode(color);
+
+	WriteInt32(w, 1);
+	WriteInt32(w, minx);
+	WriteInt32(w, maxx);
+	WriteInt32(w, miny);
+	WriteInt32(w, maxy);
+	WriteUInt32(w, color_code);
+}
+
+func Draw(width, height: Int32, render_memory:@Int8, state: @State)
+{
+	w: MemoryWriter;
+	w.at = render_memory;
+
+	background_color := Color(0, 0, 0);
+	RenderRect(@w, 0, width, 0, height, background_color);
+
+	use state;
+
+	rect_color := Color(0, 0, 1);
+	RenderRect(@w, offset, offset + 50, 100, 150, rect_color);
+
+	offset++;
+	if offset >= width
+	{
+		offset = 0;
 	}
 
-	DrawGradient(@bitmap, state);
+	StopRender(@w);
 }

@@ -26,6 +26,7 @@
     <None Include="Test.m64" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="BitmapRender.hpp" />
     <ClInclude Include="M64Runtime.hpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

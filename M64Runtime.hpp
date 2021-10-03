@@ -1,5 +1,7 @@
 // TODO: create a virtual machine if there are performance issues
 
+#include "BitmapRender.hpp"
+
 struct tdef Value
 {
 	VarType *type;
@@ -106,6 +108,9 @@ func StackPush(Runtime *runtime, int size, char *value)
 
 static BaseType Bool32Type = CreateBaseType(Bool32BaseTypeId);
 
+static BaseType Int8Type = CreateBaseType(Int8BaseTypeId);
+static PointerType Int8PointerType = CreatePointerType(&Int8Type.type);
+
 static BaseType Int32Type = CreateBaseType(Int32BaseTypeId);
 
 static BaseType UInt32Type = CreateBaseType(UInt32BaseTypeId);
@@ -189,6 +194,15 @@ func PushIntegerConstantValue(Runtime *runtime, I64 value, BaseVarTypeId base_ty
 		}
 	}
 
+	return result;
+}
+
+static Value *
+func PushInt8PointerValue(Runtime *runtime, char *value)
+{
+	Value *result = StackAllocType(runtime, Value);
+	result->type = (VarType *)&Int8PointerType;
+	result->address = StackPushVar(runtime, char *, value);
 	return result;
 }
 
@@ -383,42 +397,50 @@ static Value *
 func PushCastValueToType(Runtime *runtime, Value *from, VarType *type)
 {
 	Value *result = 0;
-	Assert(type->id == BaseTypeId);
-	Assert(from->type->id == BaseTypeId);
-	BaseType *base_type = (BaseType *)type;
-	BaseType *from_base_type = (BaseType *)from->type;
-	switch(base_type->base_id)
+	if(from->type->id == BaseTypeId)
 	{
-		case UInt32BaseTypeId:
+		Assert(type->id == BaseTypeId);
+		BaseType *base_type = (BaseType *)type;
+		BaseType *from_base_type = (BaseType *)from->type;
+		switch(base_type->base_id)
 		{
-			unsigned int value = 0;
-			switch(from_base_type->base_id)
+			case UInt32BaseTypeId:
 			{
-				case Real32BaseTypeId:
+				unsigned int value = 0;
+				switch(from_base_type->base_id)
 				{
-					value = (unsigned int)(*(float *)from->address);
-					break;
+					case Real32BaseTypeId:
+					{
+						value = (unsigned int)(*(float *)from->address);
+						break;
+					}
 				}
-			}
 
-			result = PushUInt32Value(runtime, value);
-			break;
-		}
-		case Real32BaseTypeId:
-		{
-			float value = 0;
-			switch(from_base_type->base_id)
+				result = PushUInt32Value(runtime, value);
+				break;
+			}
+			case Real32BaseTypeId:
 			{
-				case Int32BaseTypeId:
+				float value = 0;
+				switch(from_base_type->base_id)
 				{
-					value = (float)(*(int *)from->address);
-					break;
+					case Int32BaseTypeId:
+					{
+						value = (float)(*(int *)from->address);
+						break;
+					}
 				}
-			}
 
-			result = PushReal32Value(runtime, value);
-			break;
+				result = PushReal32Value(runtime, value);
+				break;
+			}
 		}
+	}
+	else if(from->type->id == PointerTypeId)
+	{
+		Assert(type->id == PointerTypeId);
+
+		result = PushPointerValue(runtime, type, *(void **)from->address);
 	}
 
 	Assert(result);
@@ -1130,6 +1152,33 @@ func ExecuteInstruction(Runtime *runtime, Instruction *instruction)
 
 			break;
 		}
+		case PlusEqualsInstructionId:
+		{
+			PlusEqualsInstruction *i = (PlusEqualsInstruction *)instruction;
+			Value *left = ExecuteExpression(runtime, i->left);
+			Value *right = ExecuteExpression(runtime, i->right);
+
+			if(IsPointerType(left->type))
+			{
+				Assert(IsIntegerType(right->type));
+
+				PointerType *pointer_type = (PointerType *)left->type;
+				VarType *pointed_type = pointer_type->pointed_type;
+
+				I64 offset = ValueToI64(right);
+				offset *= GetTypeByteSize(pointed_type);
+
+				*(char *)left->address += (int)offset;
+
+				break;
+			}
+			else
+			{
+				DebugBreak();
+			}
+
+			break;
+		}
 		case MinusEqualsInstructionId:
 		{
 			MinusEqualsInstruction *i = (MinusEqualsInstruction *)instruction;
@@ -1299,14 +1348,6 @@ func PrintValue(Value *value)
 	}
 }
 
-struct tdef Bitmap
-{
-	int width;
-	int height;
-	unsigned int *memory;
-	MemArena *arena;
-};
-
 static Bitmap global_bitmap;
 static bool global_running;
 
@@ -1322,16 +1363,6 @@ func GetBitmapInfo(Bitmap *bitmap)
 	header->biBitCount = 32;
 	header->biCompression = BI_RGB;
 	return info;
-}
-
-static void 
-func ResizeBitmap(Bitmap *bitmap, int width, int height)
-{
-	bitmap->width = width;
-	bitmap->height = height;
-
-	bitmap->arena->used_size = 0;
-	bitmap->memory = ArenaPushArray(bitmap->arena, width * height, unsigned int);
 }
 
 static LRESULT CALLBACK 
@@ -1412,7 +1443,6 @@ func CreateWindowTest(DefinitionList *defs, MemArena *arena)
 	VarType *type = GetStructTypeByName(defs, "State");
 	Assert(type);
 
-	// *TODO: get VarType for pointer to State from function definition parameter!!
 	Func *init_func = GetFuncByName(defs, "InitState");
 	FuncHeader header = init_func->header;
 	FuncParam *param = header.first_param;
@@ -1438,27 +1468,64 @@ func CreateWindowTest(DefinitionList *defs, MemArena *arena)
 	return test;
 }
 
+CreateStaticArena(render_arena, 64 * 1024 * 1024);
+
+static void
+func ArenaPushInt(MemArena *arena, int value)
+{
+	int *ptr = ArenaPushType(arena, int);
+	*ptr = value;
+}
+
+static void
+func ArenaPushUInt(MemArena *arena, unsigned int value)
+{
+	unsigned int *ptr = ArenaPushType(arena, unsigned int);
+	*ptr = value;
+}
+
+static void
+func PushBitmapDrawRect(MemArena *arena, int minx, int maxx, int miny, int maxy, unsigned int color)
+{
+	ArenaPushInt(arena, BitmapDrawRectId);
+	ArenaPushInt(arena, minx);
+	ArenaPushInt(arena, maxx);
+	ArenaPushInt(arena, miny);
+	ArenaPushInt(arena, maxy);
+	ArenaPushUInt(arena, color);
+}
+
+static void
+func PushBitmapStopRender(MemArena *arena)
+{
+	ArenaPushInt(arena, BitmapStopRenderId);
+}
+
 static void 
 func Draw(Bitmap *bitmap, WindowTest *test)
 {
+	render_arena.used_size = 0;
 	Runtime *runtime = &test->runtime;
 	
-	Value *memory_value = PushUInt32PointerValue(runtime, bitmap->memory);
+	// Value *memory_value = PushUInt32PointerValue(runtime, bitmap->memory);
 	Value *width_value = PushInt32Value(runtime, bitmap->width);
 	Value *height_value = PushInt32Value(runtime, bitmap->height);
+	Value *memory_value = PushInt8PointerValue(runtime, render_arena.memory);
 
 	// TODO: create helper functions for this
 		// Maybe create a RuntimeFuncParams struct?
-	ValueListElem *memory_elem = PushValueListElem(runtime, memory_value);
 	ValueListElem *width_elem = PushValueListElem(runtime, width_value);
 	ValueListElem *height_elem = PushValueListElem(runtime, height_value);
+	ValueListElem *memory_elem = PushValueListElem(runtime, memory_value);
 	ValueListElem *state_elem = PushValueListElem(runtime, &test->state_value);
 
-	memory_elem->next = width_elem;
 	width_elem->next = height_elem;
-	height_elem->next = state_elem;
+	height_elem->next = memory_elem;
+	memory_elem->next = state_elem;
 
-	ExecuteFunction(runtime, test->draw_func, memory_elem);
+	ExecuteFunction(runtime, test->draw_func, width_elem);
+
+	ExecuteRenderCommands(bitmap, &render_arena);
 }
 
 static void 
@@ -1483,7 +1550,7 @@ func TestWindowsRuntime(HINSTANCE instance, MemArena *arena, DefinitionList *def
 		"Test",
 		WS_OVERLAPPEDWINDOW | WS_VISIBLE,
 		CW_USEDEFAULT, CW_USEDEFAULT,
-		256, 256,
+		512, 512,
 		0, 0, instance, 0
 	);
 	Assert(window);
@@ -1494,15 +1561,10 @@ func TestWindowsRuntime(HINSTANCE instance, MemArena *arena, DefinitionList *def
 	global_running = true;
 	while(global_running)
 	{
-		BOOL result = GetMessageA(&message, 0, 0, 0);
-		if(result > 0)
+		while(PeekMessage(&message, 0, 0, 0, PM_REMOVE))
 		{
 			TranslateMessage(&message);
 			DispatchMessage(&message);
-		}
-		else
-		{
-			break;
 		}
 
 		Bitmap *bitmap = &global_bitmap;
