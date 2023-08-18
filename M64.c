@@ -283,6 +283,8 @@ int main(int arg_n, char **arg_v)
 	ParseInput input = {};
 	input.pos = &pos;
 	
+	bool any_error = false;
+	
 	while(1)
 	{
 		Token token = ReadToken(&input);
@@ -293,6 +295,7 @@ int main(int arg_n, char **arg_v)
 			if(!ReadTokenType(&input, OpenBracesTokenId))
 			{
 				printf("Expected '{' after '#c_code'!\n");
+				any_error = true;
 			}
 			
 			Token c_code_token = ReadTokenUntilClosingBraces(&input);
@@ -302,15 +305,20 @@ int main(int arg_n, char **arg_v)
 			if(!ReadTokenType(&input, CloseBracesTokenId))
 			{
 				printf("No matching '}' after '#c_code'!\n");
+				any_error = true;
 			}
 		}
 		else if(token.id == UnknownTokenId)
 		{
 			printf("Unknown token: [%.*s]\n", token.length, token.text);
+			any_error = true;
 		}
 	}
 	
+	if(any_error) return -1;
+		
 	printf("Done transpiling!\n");
 
+	
 	return 0;
 }
