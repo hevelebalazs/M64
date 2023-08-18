@@ -8,6 +8,38 @@
 #define true 1
 #define false 0
 
+typedef struct tdef MemoryArena
+{
+	char *memory;
+	size_t max_size;
+	size_t used_size;
+} MemoryArena;
+
+static MemoryArena
+func CreateArena(size_t max_size)
+{
+	MemoryArena arena = {};
+	arena.max_size = max_size;
+	arena.used_size = 0;
+	arena.memory = malloc(max_size);
+	return arena;
+}
+
+static char *
+func ArenaPush(MemoryArena *arena, size_t size)
+{
+	char *memory = arena->memory + arena->used_size;
+	arena->used_size += size;
+	while(arena->used_size > arena->max_size)
+	{
+		printf("Arena ran out of memory!\n");
+		return 0;
+	}
+	return memory;
+}
+
+#define ArenaPushType(arena, type) (type *)ArenaPush(arena, sizeof(type))
+
 typedef struct tdef CodePosition
 {
 	char *at;
@@ -15,8 +47,15 @@ typedef struct tdef CodePosition
 
 typedef struct tdef ParseInput
 {
+	MemoryArena arena;
 	CodePosition *pos;
+	bool any_error;
 } ParseInput;
+
+typedef struct tdef Output
+{
+	MemoryArena arena;
+} Output;
 
 typedef enum tdef TokenId
 {
@@ -24,15 +63,17 @@ typedef enum tdef TokenId
 	PoundCCodeTokenId,
 	OpenBracesTokenId,
 	CloseBracesTokenId,
+	EndOfFileTokenId,
 	CCodeTokenId,
-	EndOfFileTokenId
+	FuncTokenId,
+	NameTokenId
 } TokenId;
 
 typedef struct tdef Token
 {
 	TokenId id;
 	char *text;
-	int length;
+	size_t length;
 } Token;
 
 static char *
@@ -91,6 +132,12 @@ func TokenEquals(Token token, char *text)
 	}
 
 	return (text_matches && length_matches);
+}
+
+static bool
+func IsDigit(char c)
+{
+	return (c >= '0' && c <= '9');
 }
 
 static bool
@@ -184,6 +231,23 @@ func ReadToken(ParseInput *input)
 			token.id = PoundCCodeTokenId;
 		}
 	}
+	else if(IsAlpha(pos->at[0]))
+	{
+		while(IsAlpha(pos->at[0]) || IsDigit(pos->at[0]))
+		{
+			token.length++;
+			pos->at++;
+		}
+		
+		if(TokenEquals(token, "func"))
+		{
+			token.id = FuncTokenId;
+		}
+		else
+		{
+			token.id = NameTokenId;
+		}
+	}
 	else
 	{
 		while(!IsWhiteSpace(pos->at[0]))
@@ -198,7 +262,7 @@ func ReadToken(ParseInput *input)
 }
 
 static bool
-func ReadTokenType(ParseInput *input, TokenId id)
+func ReadTokenId(ParseInput *input, TokenId id)
 {
 	bool result = false;
 	SkipWhiteSpace(input->pos);
@@ -250,6 +314,184 @@ func ReadTokenUntilClosingBraces(ParseInput *input)
 	return token;
 }
 
+static Token
+func PeekToken(ParseInput *input)
+{
+	CodePosition start_pos = *input->pos;
+	Token token = ReadToken(input);
+	*input->pos = start_pos;
+	
+	return token;
+}
+
+static bool
+func PeekTokenId(ParseInput *input, TokenId id)
+{
+	Token token = PeekToken(input);
+	return (token.id == id);
+}
+
+typedef enum tdef DefinitionId
+{
+	FuncDefinitionId,
+	CCodeDefinitionId
+} DefinitionId;
+
+typedef struct tdef Definition
+{
+	DefinitionId id;
+} Definition;
+
+typedef struct tdef DefinitionList
+{
+	Definition *definition;
+	struct DefinitionList *next;
+} DefinitionList;
+
+typedef DefinitionList tdef DefinitionListElem;
+
+typedef struct tdef CCodeDefinition
+{
+	Definition def;
+	
+	Token code;
+} CCodeDefinition;
+
+static CCodeDefinition *
+func ReadCCodeDefinition(ParseInput *input)
+{
+	CCodeDefinition *def = ArenaPushType(&input->arena, CCodeDefinition);
+	def->def.id = CCodeDefinitionId;
+	
+	ReadTokenId(input, PoundCCodeTokenId);
+	
+	if(!ReadTokenId(input, OpenBracesTokenId))
+	{
+		printf("Expected '{' after '#c_code'!\n");
+		input->any_error = true;
+	}
+	
+	Token c_code_token = ReadTokenUntilClosingBraces(input);
+	c_code_token.id = CCodeTokenId;
+	def->code = c_code_token;
+
+	if(!ReadTokenId(input, CloseBracesTokenId))
+	{
+		printf("No matching '}' after '#c_code'!\n");
+		input->any_error = true;
+	}
+	
+	return def;
+}
+
+static Definition *
+func ReadDefinition(ParseInput *input)
+{
+	Definition *def = 0;
+	Token token = PeekToken(input);
+	if(token.id == PoundCCodeTokenId)
+	{
+		def = (Definition *)ReadCCodeDefinition(input);
+	}
+	else
+	{
+		printf("Expected definition instead of '%.*s'!\n", token.length, token.text);
+		input->any_error = true;
+		ReadToken(input);
+	}
+	
+	return def;
+}
+
+static DefinitionList *
+func ReadDefinitionList(ParseInput *input)
+{
+	DefinitionListElem *first_elem = 0;
+	DefinitionListElem *last_elem = 0;
+	while(1)
+	{
+		if(PeekTokenId(input, EndOfFileTokenId))
+		{
+			break;
+		}
+		
+		Definition *definition = ReadDefinition(input);
+		
+		if(definition)
+		{
+			DefinitionListElem *elem = ArenaPushType(&input->arena, DefinitionListElem);
+			elem->next = 0;
+			elem->definition = definition;
+		
+			if(!last_elem)
+			{
+				first_elem = elem;
+				last_elem = elem;
+			}
+			else
+			{
+				last_elem->next = elem;
+				last_elem = elem;
+			}
+		}
+	}
+
+	return first_elem;
+}
+
+static void 
+func WriteChar(Output *output, char c)
+{
+	char *mem = ArenaPushType(&output->arena, char);
+	*mem = c;
+}
+
+static void 
+func WriteString(Output *output, char* string)
+{
+	for(size_t i = 0; string[i]; i++)
+	{
+		WriteChar(output, string[i]);
+	}
+}
+
+static void 
+func WriteToken(Output *output, Token token)
+{
+	for(size_t i = 0; i < token.length; i++)
+	{
+		WriteChar(output, token.text[i]);
+	}
+}
+
+static void
+func WriteDefinitionList(Output *output, DefinitionList *def_list)
+{
+	DefinitionListElem *elem = def_list;
+	bool first = true;
+	while(elem)
+	{
+		if(!first)
+		{
+			WriteString(output, "\n");
+		}
+		
+		Definition *definition = elem->definition;
+		switch(definition->id)
+		{
+			case CCodeDefinitionId:
+			{
+				CCodeDefinition *def = (CCodeDefinition *)definition;
+				WriteToken(output, def->code);
+				break;
+			}
+		}
+		
+		elem = elem->next;
+		first = false;
+	}
+}
+
 int main(int arg_n, char **arg_v)
 {
 	setvbuf(stdout, NULL, _IONBF, 0);
@@ -283,40 +525,21 @@ int main(int arg_n, char **arg_v)
 	ParseInput input = {};
 	input.pos = &pos;
 	
-	bool any_error = false;
+	input.arena = CreateArena((size_t)64 * 1024 * 1024);
 	
-	while(1)
+	DefinitionList *def_list = ReadDefinitionList(&input);
+	
+	if(input.any_error) return -1;
+	
+	Output output = {};
+	output.arena = CreateArena((size_t)64 * 1024);
+	WriteDefinitionList(&output, def_list);
+	
+	for(size_t i = 0; i < output.arena.used_size; i++)
 	{
-		Token token = ReadToken(&input);
-		if(token.id == EndOfFileTokenId) break;
-		
-		if(token.id == PoundCCodeTokenId)
-		{
-			if(!ReadTokenType(&input, OpenBracesTokenId))
-			{
-				printf("Expected '{' after '#c_code'!\n");
-				any_error = true;
-			}
-			
-			Token c_code_token = ReadTokenUntilClosingBraces(&input);
-
-			fprintf(out, "%.*s", c_code_token.length, c_code_token.text);
-			
-			if(!ReadTokenType(&input, CloseBracesTokenId))
-			{
-				printf("No matching '}' after '#c_code'!\n");
-				any_error = true;
-			}
-		}
-		else if(token.id == UnknownTokenId)
-		{
-			printf("Unknown token: [%.*s]\n", token.length, token.text);
-			any_error = true;
-		}
+		fprintf(out, "%c", output.arena.memory[i]);
 	}
-	
-	if(any_error) return -1;
-		
+
 	printf("Done transpiling!\n");
 
 	
