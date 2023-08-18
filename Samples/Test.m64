@@ -1,6 +1,60 @@
+struct V2
+{
+	x, y: Real32;
+}
+
+constructor V2(x, y: Real32)
+{
+	result:V2;
+	result.x = x;
+	result.y = y;
+	return result;
+}
+
+operator c:Real32 * v:V2 :V2
+{
+	result: V2;
+	result.x = c * v.x;
+	result.y = c * v.y;
+	return result;
+}
+
+operator v1:V2 + v2:V2 :V2
+{
+	result: V2;
+	result.x = v1.x + v2.x;
+	result.y = v1.y + v2.y;
+	return result;
+}
+
+operator v1:V2 - v2:V2 :V2
+{
+	result: V2;
+	result.x = v1.x - v2.x;
+	result.y = v1.y - v2.y;
+	return result;
+}
+
+struct Body
+{
+	// TODO: use struct member
+	// use position: V2;
+	velocity: V2;
+	position: V2;
+}
+
+func UpdateBody(body: @Body, dt: Real32)
+{
+	use body;
+	// TODO: make sure += works with operator +
+	// position += dt * velocity;
+	position = position + dt * velocity;
+}
+
 struct State
 {
 	x, y: Int32;
+	body: Body;
 }
 
 func InitState(state: @State)
@@ -8,6 +62,8 @@ func InitState(state: @State)
 	use state;
 	x = 0;
 	y = 0;
+	body.position = V2(:Real32(0), :Real32(0));
+	body.velocity = V2(:Real32(0), :Real32(0));
 }
 
 struct V4
@@ -110,7 +166,54 @@ func RenderRect(w: @MemoryWriter, minx, maxx, miny, maxy: Int32, color: V4)
 	WriteUInt32(w, color_code);
 }
 
-// TODO: follow mouse
+func Abs(v: Real32) :Real32
+{
+	result := v;
+	if v < 0
+	{
+		result = -v;
+	}
+
+	return result;
+}
+
+func SquareRoot(n: Real32) :Real32
+{
+	l := 0.001;
+	x := n;
+
+	root: Real32;
+
+	count := 0;
+	while 1
+	{
+		count++;
+
+		root = 0.5 * (x + (n / x));
+		if Abs(root - x) < l
+		{
+			break;
+		}
+
+		x = root;
+	}
+
+	return root;
+}
+
+func GetV2Length(v: V2) :Real32
+{
+	length := SquareRoot(v.x * v.x + v.y * v.y);
+	return length;
+}
+
+func NormalizeV2(v: V2) :V2
+{
+	length := GetV2Length(v);
+	result := (1.0 / length) * v;
+	return result;
+}
+
 func Draw(width, height: Int32, render_memory:@Int8, state: @State, mouse_x, mouse_y: Int32)
 {
 	w: MemoryWriter;
@@ -121,12 +224,24 @@ func Draw(width, height: Int32, render_memory:@Int8, state: @State, mouse_x, mou
 
 	use state;
 
+	mouse := V2(:Real32(mouse_x), :Real32(mouse_y));
+	body.velocity = NormalizeV2(mouse - body.position);
+
+	dt := 1.0 / 60.0;
+	UpdateBody(@body, dt);
+
 	// TODO: make sure type gets inferred properly
 	// radius := 25;
-	radius := :Int32(25);
+	radius := 25.0;
 
 	rect_color := Color(0, 0, 1);
-	RenderRect(@w, x - radius, x + radius, y - radius, y + radius, rect_color);
+
+	minx := :Int32(body.position.x - radius);
+	maxx := :Int32(body.position.x + radius);
+	miny := :Int32(body.position.y - radius);
+	maxy := :Int32(body.position.y + radius);
+
+	RenderRect(@w, minx, maxx, miny, maxy, rect_color);
 
 	if x < mouse_x { x++; }
 	if x > mouse_x { x--; }

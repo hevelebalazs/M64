@@ -1,0 +1,37 @@
+#func DefineArray(T : #Type, name : #TypeName)
+{
+	#gen
+	{
+		struct %name
+		{
+			n : i32;
+			use elems : @[#n]%T;
+		}
+	}
+}
+
+DefineArray(i32, IntArray);
+
+// Gen
+struct IntArray
+{
+	n : i32;
+	use elems : @[#n]i32;
+}
+
+DefineArray(f32, FloatArray)
+
+// Gen
+struct FloatArray
+{
+	n : i32;
+	use elems : @[#n]f32;
+}
+
+func main() : i32
+{
+	a : IntArray;
+	b : FloatArray;
+
+	return 0;
+}

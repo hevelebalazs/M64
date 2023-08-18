@@ -1,4 +1,3 @@
-#include <Windows.h>
 #include <stdio.h>
 
 #define Assert(condition) {if(!(condition)) DebugBreak();}
@@ -1670,8 +1669,6 @@ func SetStackState(ParseInput *input, StackState stack_state)
 	input->enum_stack.size = stack_state.enum_stack_size;
 	input->constructor_stack.size = stack_state.constructor_stack_size;
 }
-
-#include <stdio.h>
 
 static void
 func PrintLine(CodeLine line)
@@ -4263,7 +4260,7 @@ func ReadSumLevelExpression(ParseInput *input)
 			{
 				expr = (Expression *)PushOperatorCallExpression(input->arena, op, expr, right);
 			}
-			else if(MatchExpressionTypes(input, expr, right))
+			else if(MatchExpressionTypesToAdd(input, expr, right))
 			{
 				expr = (Expression *)PushSubtractExpression(input->arena, expr, right);
 			}
@@ -7362,7 +7359,6 @@ func ReadFuncDefinition(ParseInput *input)
 static OperatorDefinition *
 func ReadOperatorDefinition(ParseInput *input)
 {
-	Assert(ReadTokenType(input, OperatorTokenId));
 	Operator *op = ReadOperator(input);
 	PushOperator(&input->operator_stack, op);
 
@@ -7374,7 +7370,6 @@ func ReadOperatorDefinition(ParseInput *input)
 static ConstructorDefinition *
 func ReadConstructorDefinition(ParseInput *input)
 {
-	Assert(ReadTokenType(input, ConstructorTokenId));
 	Constructor *constructor = ReadConstructor(input);
 	PushConstructor(&input->constructor_stack, constructor);
 
@@ -7675,7 +7670,7 @@ func CompileToCPP(const char *m64_file_name, const char *cpp_file_name)
 	scanf_s("%c", &c, 1);
 }
 
-#include "M64Runtime.hpp"
+#include "M64Runtime.h"
 
 // TODO: move this into M64Runtime.hpp!
 CreateStaticArena(runtime_bitmap_arena, 64 * 1024 * 1024);

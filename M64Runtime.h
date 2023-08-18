@@ -1,6 +1,6 @@
 // TODO: create a virtual machine if there are performance issues
 
-#include "BitmapRender.hpp"
+#include "BitmapRender.h"
 
 struct tdef Value
 {
@@ -470,6 +470,8 @@ func PushCastValueToType(Runtime *runtime, Value *from, VarType *type)
 	return result;
 }
 
+static void decl ExecuteInstruction(Runtime *, Instruction *);
+
 static Value *
 func ExecuteExpression(Runtime *runtime, Expression *expression)
 {
@@ -852,6 +854,92 @@ func ExecuteExpression(Runtime *runtime, Expression *expression)
 			result = StackAllocType(runtime, Value);
 			result->type = var->type;
 			result->address = OffsetPointer(meta_address, var->address_offset);
+
+			break;
+		}
+		case ConstructorCallExpressionId:
+		{
+			ConstructorCallExpression *e = (ConstructorCallExpression *)expression;
+
+			ValueList *param_values = 0;
+			ValueListElem *last_param_value = 0;
+
+			FuncCallParam *param = e->first_param;
+			while(param)
+			{
+				Value *value = ExecuteExpression(runtime, param->expression);
+				ValueListElem *elem = PushValueListElem(runtime, value);
+				if(!param_values)
+				{
+					param_values = elem;
+					last_param_value = elem;
+				}
+				else
+				{
+					last_param_value->next = elem;
+					last_param_value = elem;
+				}
+
+				param = param->next;
+			}
+
+			{
+				Constructor *ctor = e->ctor;
+			
+				RuntimeStackState stack_state = runtime->stack_state;
+
+				runtime->stack_state.first_var = stack_state.var_n;
+
+				FuncHeader header = ctor->header;
+				FuncParam *param = header.first_param;
+				ValueListElem *param_value = param_values;
+				while(param_value)
+				{
+					Assert(param);
+					Assert(TypesEqual(param->type, param_value->value->type));
+
+					AddRuntimeVar(runtime, param->name, param_value->value);
+
+					param = param->next;
+					param_value = param_value->next;
+				}
+				Assert(param == 0);
+
+				BlockInstruction *body = ctor->body;
+				Instruction *instruction = body->first;
+				while(instruction)
+				{
+					if(instruction->id == ReturnInstructionId)
+					{
+						// TODO: handle return instructions nested somewhere
+							// add a flag to Runtime?
+						ReturnInstruction *instr = (ReturnInstruction *)instruction;
+						result = ExecuteExpression(runtime, instr->value);
+						break;
+					}
+					else
+					{
+						ExecuteInstruction(runtime, instruction);
+					}
+					instruction = instruction->next;
+				}
+
+				runtime->stack_state = stack_state;
+			}
+
+			break;
+		}
+		case OperatorCallExpressionId:
+		{
+			OperatorCallExpression *e = (OperatorCallExpression *)expression;
+
+			Value *left = ExecuteExpression(runtime, e->left);
+			Value *right = ExecuteExpression(runtime, e->right);
+
+			ValueListElem *left_elem = PushValueListElem(runtime, left);
+			ValueListElem *right_elem = PushValueListElem(runtime, right);
+
+			// TODO: finish
 
 			break;
 		}
