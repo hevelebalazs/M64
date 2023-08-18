@@ -39,23 +39,12 @@ func ArenaPush(MemoryArena *arena, size_t size)
 }
 
 #define ArenaPushType(arena, type) (type *)ArenaPush(arena, sizeof(type))
+#define ArenaPushArray(arena, count, type) (type *)ArenaPush(arena, (count) * sizeof(type))
 
 typedef struct tdef CodePosition
 {
 	char *at;
 } CodePosition;
-
-typedef struct tdef ParseInput
-{
-	MemoryArena arena;
-	CodePosition *pos;
-	bool any_error;
-} ParseInput;
-
-typedef struct tdef Output
-{
-	MemoryArena arena;
-} Output;
 
 typedef enum tdef TokenId
 {
@@ -63,6 +52,11 @@ typedef enum tdef TokenId
 	PoundCCodeTokenId,
 	OpenBracesTokenId,
 	CloseBracesTokenId,
+	OpenParenTokenId,
+	CloseParenTokenId,
+	CommaTokenId,
+	ColonTokenId,
+	AtTokenId,
 	EndOfFileTokenId,
 	CCodeTokenId,
 	FuncTokenId,
@@ -75,6 +69,45 @@ typedef struct tdef Token
 	char *text;
 	size_t length;
 } Token;
+
+typedef enum tdef VarTypeId
+{
+	NoTypeId,
+	BaseTypeId,
+	PointerTypeId
+} VarTypeId;
+
+typedef struct tdef VarType
+{
+	VarTypeId id;
+} VarType;
+
+typedef struct tdef Var
+{
+	VarType *type;
+	Token name;
+} Var;
+
+#define VarStackMaxSize 64
+typedef struct tdef VarStack
+{
+	Var *vars;
+	int size;
+} VarStack;
+
+typedef struct tdef ParseInput
+{
+	MemoryArena arena;
+	CodePosition *pos;
+	VarStack var_stack;
+	bool any_error;
+	Token last_token;
+} ParseInput;
+
+typedef struct tdef Output
+{
+	MemoryArena arena;
+} Output;
 
 static char *
 func ReadFileToMemory(FILE *file)
@@ -102,6 +135,34 @@ func ReadFileToMemory(FILE *file)
 	buffer = realloc(buffer, size + 1);
 	buffer[size] = 0;
 	return buffer;
+}
+
+static void
+func SetError(ParseInput *input, char *description)
+{
+	printf("Error: %s\n", description);
+	input->any_error = true;
+}
+
+static void
+func SetErrorToken(ParseInput *input, char *description, Token token)
+{
+	printf("Error: %s '%.*s'\n", description, token.length, token.text);
+	input->any_error = true;
+}
+
+static bool
+func TokensEqual(Token token1, Token token2)
+{
+	if(token1.id != token2.id) return false;
+	if(token1.length != token2.length) return false;
+	
+	for(size_t i = 0; i < token1.length; i++)
+	{
+		if(token1.text[i] != token2.text[i]) return false;
+	}
+	
+	return true;
 }
 
 static bool 
@@ -216,6 +277,36 @@ func ReadToken(ParseInput *input)
 		token.length = 1;
 		pos->at++;
 	}
+	else if(pos->at[0] == '(')
+	{
+		token.id = OpenParenTokenId;
+		token.length = 1;
+		pos->at++;
+	}
+	else if(pos->at[0] == ')')
+	{
+		token.id = CloseParenTokenId;
+		token.length = 1;
+		pos->at++;
+	}
+	else if(pos->at[0] == ',')
+	{
+		token.id = CommaTokenId;
+		token.length = 1;
+		pos->at++;
+	}
+	else if(pos->at[0] == ':')
+	{
+		token.id = ColonTokenId;
+		token.length = 1;
+		pos->at++;
+	}
+	else if(pos->at[0] == '@')
+	{
+		token.id = AtTokenId;
+		token.length = 1;
+		pos->at++;
+	}
 	else if(pos->at[0] == '#')
 	{
 		pos->at++;
@@ -257,6 +348,8 @@ func ReadToken(ParseInput *input)
 		}
 		token.id = UnknownTokenId;
 	}
+	
+	input->last_token = token;
 
 	return token;
 }
@@ -331,6 +424,26 @@ func PeekTokenId(ParseInput *input, TokenId id)
 	return (token.id == id);
 }
 
+typedef enum tdef InstructionId
+{
+	NoInstructionId,
+	
+	BlockInstructionId
+} InstructionId;
+
+typedef struct tdef Instruction
+{
+	InstructionId id;
+	struct Instruction *next;
+} Instruction;
+
+typedef struct tdef BlockInstruction
+{
+	Instruction i;
+
+	Instruction *first;
+} BlockInstruction;
+
 typedef enum tdef DefinitionId
 {
 	FuncDefinitionId,
@@ -367,8 +480,7 @@ func ReadCCodeDefinition(ParseInput *input)
 	
 	if(!ReadTokenId(input, OpenBracesTokenId))
 	{
-		printf("Expected '{' after '#c_code'!\n");
-		input->any_error = true;
+		SetError(input, "Expected '{' after '#c_code'!");
 	}
 	
 	Token c_code_token = ReadTokenUntilClosingBraces(input);
@@ -377,9 +489,262 @@ func ReadCCodeDefinition(ParseInput *input)
 
 	if(!ReadTokenId(input, CloseBracesTokenId))
 	{
-		printf("No matching '}' after '#c_code'!\n");
-		input->any_error = true;
+		SetError(input, "No matching '}' after '#c_code'!");
 	}
+	
+	return def;
+}
+
+typedef struct tdef PointerType
+{
+	VarType type;
+	
+	VarType *pointed_type;
+} PointerType;
+
+static PointerType *
+func PushPointerType(MemoryArena *arena, VarType *pointed_type)
+{
+	PointerType *type = ArenaPushType(arena, PointerType);
+	type->type.id = PointerTypeId;
+	type->pointed_type = pointed_type;
+	return type;
+}
+
+typedef enum tdef BaseVarTypeId
+{
+	Int32BaseTypeId
+} BaseVarTypeId;
+
+typedef struct tdef BaseType
+{
+	VarType type;
+	
+	BaseVarTypeId base_id;
+} BaseType;
+
+// TODO: have a static array of base types instead of always pushing it
+static BaseType *
+func PushBaseType(MemoryArena *arena, BaseVarTypeId base_id)
+{
+	BaseType *base_type = ArenaPushType(arena, BaseType);
+	base_type->type.id = BaseTypeId;
+	base_type->base_id = base_id;
+	return base_type;
+}
+
+static VarType *
+func ReadVarType(ParseInput *input)
+{
+	VarType *type = 0;
+	
+	if(ReadTokenId(input, AtTokenId))
+	{
+		VarType *pointed_type = ReadVarType(input);
+		if(!pointed_type)
+		{
+			SetError(input, "Expected variable type after '@'.");
+		}
+		
+		type = (VarType *)PushPointerType(&input->arena, pointed_type);
+	}
+	else if(ReadTokenId(input, NameTokenId))
+	{
+		if(TokenEquals(input->last_token, "int"))
+		{
+			type = (VarType *)PushBaseType(&input->arena, Int32BaseTypeId);
+		}
+	}
+}
+
+static Var *
+func GetVar(VarStack *stack, Token name)
+{
+	for(size_t i = 0; i < stack->size; i++)
+	{
+		Var *var = &stack->vars[i];
+		if(TokensEqual(var->name, name)) return var;
+	}
+	return 0;
+}
+
+static bool
+func VarExists(VarStack *stack, Token name)
+{
+	Var *var = GetVar(stack, name);
+	return (var != 0);
+}
+
+static void
+func PushVar(VarStack *stack, Var var)
+{
+	if(stack->size >= VarStackMaxSize)
+	{
+		printf("Var stack is full!\n");
+		return;
+	}
+	
+	stack->vars[stack->size] = var;
+	stack->size++;
+}
+
+typedef struct tdef NameList
+{
+	size_t size;
+	Token *names;
+} NameList;
+
+static NameList
+func ReadNameList(ParseInput *input)
+{
+	NameList list = {};
+	list.size = 0;
+	list.names = ArenaPushArray(&input->arena, 0, Token);
+	while(1)
+	{
+		if(ReadTokenId(input, NameTokenId))
+		{
+			Token *token = ArenaPushType(&input->arena, Token);
+			*token = input->last_token;
+			list.size++;
+		}
+		else
+		{
+			break;
+		}
+		
+		if(!ReadTokenId(input, CommaTokenId)) break;
+	}
+	
+	return list;
+}
+
+static BlockInstruction *
+func ReadBlock(ParseInput *input)
+{
+	// TODO: finish this
+	return 0;
+}
+
+typedef struct tdef FuncParam
+{
+	struct FuncParam *next;
+	Token name;
+	VarType *type;
+} FuncParam;
+
+typedef struct tdef FuncHeader
+{
+	Token name;
+	
+	FuncParam *first_param;
+	VarType *return_type;
+} FuncHeader;
+
+typedef struct tdef FuncDefinition
+{
+	Definition def;
+	
+	FuncHeader header;
+	BlockInstruction *body;
+} FuncDefinition;
+
+static FuncHeader
+func ReadFuncHeader(ParseInput *input)
+{
+	Token name = ReadToken(input);
+	if(name.id != NameTokenId)
+	{
+		SetErrorToken(input, "Invalid function name!", name);
+	}
+	
+	if(!ReadTokenId(input, OpenParenTokenId))
+	{
+		SetError(input, "Expected '(' after function name!");
+	}
+	
+	FuncParam *first_param = 0;
+	FuncParam *last_param = 0;
+	while(1)
+	{
+		if(ReadTokenId(input, CloseParenTokenId)) break;
+		
+		if(first_param)
+		{
+			if(!ReadTokenId(input, CommaTokenId))
+			{
+				SetError(input, "Expected ',' between function parameters!");
+			}
+		}
+		
+		NameList name_list = ReadNameList(input);
+		if(name_list.size == 0)
+		{
+			SetError(input, "Expected ',' or ')' after function parameter.");
+		}
+		if(!ReadTokenId(input, ColonTokenId))
+		{
+			SetError(input, "Expected ':' after function parameter name.");
+		}
+		
+		VarType *param_type = ReadVarType(input);
+		for(size_t i = 0; i < name_list.size; i++)
+		{
+			Token param_name = name_list.names[i];
+			if(VarExists(&input->var_stack, param_name))
+			{
+				SetErrorToken(input, "Variable already exists, cannot be used as a function parameter ", param_name);
+			}
+			
+			FuncParam *param = ArenaPushType(&input->arena, FuncParam);
+			param->name = param_name;
+			param->type = param_type;
+			param->next = 0;
+			if(last_param)
+			{
+				last_param->next = param;
+				last_param = param;
+			}
+			else
+			{
+				first_param = param;
+				last_param = param;
+			}
+			
+			Var var = {};
+			var.name = param_name;
+			var.type = param_type;
+			PushVar(&input->var_stack, var);
+		}
+	}
+	
+	VarType *return_type = 0;
+	if(ReadTokenId(input, ColonTokenId)) return_type = ReadVarType(input);
+	
+	FuncHeader header = {};
+	header.name = name;
+	header.first_param = first_param;
+	header.return_type = return_type;
+	return header;
+}
+
+static FuncDefinition *
+func ReadFuncDefinition(ParseInput *input)
+{
+	ReadTokenId(input, FuncTokenId);	
+	
+	FuncDefinition *def = ArenaPushType(&input->arena, FuncDefinition);
+	def->def.id = FuncDefinitionId;
+	
+	FuncHeader header = ReadFuncHeader(input);
+	BlockInstruction *body = ReadBlock(input);
+	if(!body)
+	{
+		SetError(input, "Function doesn't have a body!");
+	}
+	
+	def->header = header;
+	def->body = body;
 	
 	return def;
 }
@@ -393,10 +758,13 @@ func ReadDefinition(ParseInput *input)
 	{
 		def = (Definition *)ReadCCodeDefinition(input);
 	}
+	else if(token.id == FuncTokenId)
+	{
+		def = (Definition *)ReadFuncDefinition(input);
+	}
 	else
 	{
-		printf("Expected definition instead of '%.*s'!\n", token.length, token.text);
-		input->any_error = true;
+		SetErrorToken(input, "Expected definition instead of ", token);
 		ReadToken(input);
 	}
 	
@@ -526,6 +894,9 @@ int main(int arg_n, char **arg_v)
 	input.pos = &pos;
 	
 	input.arena = CreateArena((size_t)64 * 1024 * 1024);
+	
+	input.var_stack.vars = ArenaPushArray(&input.arena, VarStackMaxSize, Var);
+	input.var_stack.size = 0;
 	
 	DefinitionList *def_list = ReadDefinitionList(&input);
 	
