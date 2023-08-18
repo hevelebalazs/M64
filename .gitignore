@@ -1,3 +1,5 @@
 Debug/*
 Samples/*.hpp
 .vs/*
+*.exe
+Example/*.c
