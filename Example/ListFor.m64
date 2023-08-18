@@ -1,0 +1,38 @@
+struct List
+{
+	value : int;
+	next : @List;
+}
+
+#for in List (E : #Expression)
+{
+	elem := #ContainerAddress#;
+	i := 0;
+	while elem
+	{
+		#ForIterator# := elem.value;
+		#ForIndex# := i;
+		E;
+		
+		i++;
+		elem = elem.next;
+	}
+}
+
+// Example usage
+func main() : int
+{
+	y : List;
+	y.value = 3;
+
+	x : List;
+	x.value = 0;
+	x.next = @y;
+	
+	for v : in x
+	{
+		PrintLine("%i: %v");
+	}
+
+	return 0;
+}

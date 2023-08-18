@@ -1,0 +1,105 @@
+#def HeapGen(T : #name, X : #type) (cmp: #func(X, X))
+{
+	struct #T#
+	{
+		n : int;
+		values : @[#n]X;
+	}
+
+	func #T#Init(n : int, values : @X) %Name%
+	{
+		heap : %Name%;
+		heap.n = n;
+		heap.values = X;
+		return heap;
+	}
+
+	func #T#Add(heap : @#T#, value : X)
+	{
+		use heap;
+		values[n] = value;
+		n++;
+		
+		at := n - 1;
+		while 1
+		{
+			if at == 0: break;
+			
+			parent := (at - 1) / 2;
+			if cmp(values[at], values[parent])
+			{
+				X tmp = values[at];
+				values[at] = values[parent];
+				values[parent] = tmp;
+				
+				at = parent;
+			}
+		}
+	}
+	
+	func #T#Pop(heap : @#T#) X
+	{
+		use heap;
+		result := values[0];
+		n--;
+		values[0] = values[n];
+		
+		at := 0;
+		while 1
+		{
+			at1 := at;
+			#left := 2 * at + 1;
+			#right := 2 * at + 2;
+			
+			if left < n && cmp(values[left], values[at1]): at1 = left;
+			if right < n && cmp(values[right], values[at1]): at1 = right;
+			
+			if at == at1: break;
+			
+			X tmp = values[at];
+			values[at] = values[at1];
+			values[at1] = tmp;
+			
+			at = at1;
+		}
+		
+		return result;
+	}
+}
+
+HeapGen(HeapIntAsc, int)(#func(a1 : int, a2 : int){return a1 < a2;})
+HeapGen(HeapIntDesc, int)(#func(a1 : int, a2 : int){return a1 > a2;})
+
+#c_code
+{
+	#include <stdio.h>
+	
+	int main()
+	{
+		int A[10];
+		for(int i = 0; i < 10; i++)
+		{
+			scanf("%i", &A[i]);
+		}
+		
+		HeapIntAsc heap = HeapIntAscInit(10);
+		for(int i = 0; i < 10; i++) HeapIntAscAdd(&heap, A[i]);
+		
+		for(int i = 0; i < 10; i++)
+		{
+			int x = HeapIntAscPop(&heap);
+			printf("%x\n", x);
+		}
+		
+		HeapIntDesc heap = HeapIntDescInit(10);
+		for(int i = 0; i < 10; i++) HeapIntDescAdd(&heap, A[i]);
+		
+		for(int i = 0; i < 10; i++)
+		{
+			int x = HeapIntDescPop(&heap);
+			printf("%x\n", x);
+		}
+		
+		return 0;
+	}
+}
