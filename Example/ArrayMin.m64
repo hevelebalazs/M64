@@ -18,6 +18,8 @@ func ArrayMin(n : int, A : @int) int
 	
 	int main()
 	{
+		setvbuf(stdout, NULL, _IONBF, 0);
+	
 		printf("Finding minimum in array\n");
 		while(1)
 		{
@@ -39,6 +41,8 @@ func ArrayMin(n : int, A : @int) int
 			
 			int min = ArrayMin(n, A);
 			printf("min=%i\n", min);
+			
+			break;
 		}
 		
 		return 0;

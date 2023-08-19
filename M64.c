@@ -1591,6 +1591,88 @@ func WriteToken(Output *output, Token token)
 }
 
 static void
+func WriteType(Output *output, VarType *type)
+{
+	switch(type->id)
+	{
+		case BaseTypeId:
+		{
+			BaseType *t = (BaseType *)type;
+			switch(t->base_id)
+			{
+				case BoolBaseTypeId:
+				{
+					WriteString(output, "int");
+					break;
+				}
+				case Int32BaseTypeId:
+				{
+					WriteString(output, "int");
+					break;
+				}
+			}
+			break;
+		}
+		case PointerTypeId:
+		{
+			PointerType *t = (PointerType *)type;
+			WriteType(output, t->pointed_type);
+			WriteString(output, " *");
+			break;
+		}
+	}
+}
+
+static void
+func WriteTypeAndVar(Output *output, VarType *type, Token var_name)
+{
+	WriteType(output, type);
+	if(type->id != PointerTypeId)
+	{
+		WriteString(output, " ");
+	}
+	WriteToken(output, var_name);
+}
+
+static void
+func WriteFuncHeader(Output *output, FuncHeader *header)
+{
+	if(header->return_type)
+	{
+		WriteType(output, header->return_type);
+		WriteString(output, " ");
+	}
+	else
+	{
+		WriteString(output, "void ");
+	}
+	
+	WriteToken(output, header->name);
+	WriteString(output, "(");
+	
+	bool is_first_param = true;
+	FuncParam *param = header->first_param;
+	while(param)
+	{
+		if(is_first_param) is_first_param = false;
+		else WriteString(output, ", ");
+		
+		WriteTypeAndVar(output, param->type, param->name);
+		
+		param = param->next;
+	}
+	
+	WriteString(output, ")");
+}
+
+static void
+WriteBlock(Output *output, BlockInstruction *block)
+{
+	WriteString(output, "{\n");
+	WriteString(output, "}\n");
+}
+
+static void
 func WriteDefinitionList(Output *output, DefinitionList *def_list)
 {
 	DefinitionListElem *elem = def_list;
@@ -1609,6 +1691,17 @@ func WriteDefinitionList(Output *output, DefinitionList *def_list)
 			{
 				CCodeDefinition *def = (CCodeDefinition *)definition;
 				WriteToken(output, def->code);
+				break;
+			}
+			case FuncDefinitionId:
+			{
+				FuncDefinition *def = (FuncDefinition *)definition;
+				
+				WriteFuncHeader(output, &def->header);
+				WriteString(output, "\n");
+
+				WriteBlock(output, def->body);
+				
 				break;
 			}
 		}
