@@ -45,6 +45,8 @@ func ArenaPush(MemoryArena *arena, size_t size)
 typedef struct tdef CodePosition
 {
 	char *at;
+	size_t row;
+	size_t col;
 } CodePosition;
 
 typedef enum tdef TokenId
@@ -60,6 +62,7 @@ typedef enum tdef TokenId
 	ColonEqualsTokenId,
 	ColonTokenId,
 	EndOfFileTokenId,
+	EqualsTokenId,
 	ForTokenId,
 	FuncTokenId,
 	IfTokenId,
@@ -70,6 +73,7 @@ typedef enum tdef TokenId
 	OpenBracketsTokenId,
 	OpenParenTokenId,
 	PoundCCodeTokenId,
+	ReturnTokenId,
 	SemiColonTokenId,
 	ToTokenId
 } TokenId;
@@ -79,6 +83,8 @@ typedef struct tdef Token
 	TokenId id;
 	char *text;
 	size_t length;
+	size_t row;
+	size_t col;
 } Token;
 
 typedef enum tdef VarTypeId
@@ -151,12 +157,20 @@ func IsIntegerType(VarType *type)
 typedef struct tdef VarStack
 {
 	Var *vars;
-	int size;
+	size_t size;
 } VarStack;
+
+typedef struct tdef CodeLine
+{
+	char *string;
+	size_t length;
+} CodeLine;
 
 typedef struct tdef ParseInput
 {
 	MemoryArena arena;
+	size_t line_n;
+	CodeLine *lines;
 	CodePosition *pos;
 	VarStack var_stack;
 	bool any_error;
@@ -197,18 +211,45 @@ func ReadFileToMemory(FILE *file)
 }
 
 static void
-func SetError(ParseInput *input, char *description)
+func PrintLine(CodeLine line)
 {
-	printf("Error: %s\n", description);
-	input->any_error = true;
+	printf("%.*s\n", line.length, line.string);
+}
+
+static void
+func PrintTokenInLine(ParseInput *input, Token token)
+{
+	CodeLine line = input->lines[token.row];
+	PrintLine(input->lines[token.row]);
+	for(size_t i = 0; i < token.col - 1; i++)
+	{
+		if(line.string[i] == '\t') printf("\t");
+		else printf(" ");
+	}
+	for(int i = 0; i < token.length; i++)
+	{
+		printf("^");
+	}
+	printf("\n");
 }
 
 static void
 func SetErrorToken(ParseInput *input, char *description, Token token)
 {
-	printf("Error: %s '%.*s'\n", description, token.length, token.text);
+	printf("Error: %s\n", description);
+	printf("In line %i\n", token.row);
+	PrintTokenInLine(input, token);
+	printf("\n");
+	
 	input->any_error = true;
 }
+
+static void
+func SetError(ParseInput *input, char *description)
+{
+	SetErrorToken(input, description, input->last_token);
+}
+
 
 static bool
 func TokensEqual(Token token1, Token token2)
@@ -300,12 +341,51 @@ func SkipWhiteSpace(CodePosition *pos)
 	{
 		if(IsWhiteSpace(pos->at[0]))
 		{
+			if(IsNewLine(pos->at[0]))
+			{
+				pos->row++;
+				pos->col = 1;
+			}
+			else
+			{
+				pos->col++;
+			}
 			pos->at++;
 		}
 		else
 		{
 			break;
 		}
+	}
+}
+
+static void
+func ReadCodeLines(ParseInput *input)
+{
+	input->lines = ArenaPushArray(&input->arena, 2, CodeLine);
+	input->line_n = 2;
+	
+	size_t row = 1;
+	char *at = input->pos->at;
+	input->lines[row].string = at;
+	input->lines[row].length = 0;
+	
+	while(*at)
+	{
+		if(IsNewLine(*at))
+		{
+			ArenaPushType(&input->arena, CodeLine);
+			row++;
+			input->lines[row].string = at + 1;
+			input->lines[row].length = 0;
+			input->line_n++;
+		}
+		else
+		{
+			input->lines[row].length++;
+		}
+		
+		at++;
 	}
 }
 
@@ -319,6 +399,8 @@ func ReadToken(ParseInput *input)
 	token.id = UnknownTokenId;
 	token.text = pos->at;
 	token.length = 0;
+	token.row = pos->row;
+	token.col = pos->col;
 
 	if(pos->at[0] == 0)
 	{
@@ -393,6 +475,12 @@ func ReadToken(ParseInput *input)
 		token.length = 1;
 		pos->at++;
 	}
+	else if(pos->at[0] == '=')
+	{
+		token.id = EqualsTokenId;
+		token.length = 1;
+		pos->at++;
+	}
 	else if(pos->at[0] == '@')
 	{
 		token.id = AtTokenId;
@@ -451,6 +539,10 @@ func ReadToken(ParseInput *input)
 		{
 			token.id = IfTokenId;
 		}
+		else if(TokenEquals(token, "return"))
+		{
+			token.id = ReturnTokenId;
+		}
 		else if(TokenEquals(token, "to"))
 		{
 			token.id = ToTokenId;
@@ -470,6 +562,7 @@ func ReadToken(ParseInput *input)
 		token.id = UnknownTokenId;
 	}
 	
+	input->pos->col += token.length;
 	input->last_token = token;
 
 	return token;
@@ -710,6 +803,10 @@ func ReadNumberLevelExpression(ParseInput *input)
 			Var *var = GetVar(&input->var_stack, name);
 			e = (Expression *)PushVarExpression(&input->arena, *var);
 		}
+		else
+		{
+			SetErrorToken(input, "Unexpected token ", name);
+		}
 	}
 	else
 	{
@@ -728,7 +825,14 @@ func ReadNumberLevelExpression(ParseInput *input)
 			}
 			
 			Expression *index = ReadExpression(input);
-			if(!index || !IsIntegerType(index->type))
+			
+			if(!index)
+			{
+				SetError(input, "Expected array index expression.");
+				continue;
+			}
+			
+			if(!index->type || !IsIntegerType(index->type))
 			{
 				SetError(input, "Array index is not integer.");
 				continue;
@@ -848,10 +952,12 @@ func SetStackState(ParseInput *input, StackState state)
 
 typedef enum tdef InstructionId
 {
+	AssignInstructionId,
 	BlockInstructionId,
 	CreateVariableInstructionId,
 	IfInstructionId,
-	ForInstructionId
+	ForInstructionId,
+	ReturnInstructionId
 } InstructionId;
 
 typedef struct tdef Instruction
@@ -868,6 +974,14 @@ typedef struct tdef BlockInstruction
 } BlockInstruction;
 
 static BlockInstruction * decl ReadBlock(ParseInput *);
+
+typedef struct tdef AssignInstruction
+{
+	Instruction i;
+	
+	Expression *left;
+	Expression *right;
+} AssignInstruction;
 
 typedef struct tdef CreateVariableInstruction
 {
@@ -972,11 +1086,36 @@ func ReadForInstruction(ParseInput *input)
 	i->from = from;
 	i->to = to;
 	i->less_than = less_than;
-	i->body = ReadBlock(input);
 	
 	PushVar(&input->var_stack, i->index_var);
+	i->body = ReadBlock(input);
 	
 	SetStackState(input, stack_state);
+	return i;
+}
+
+typedef struct tdef ReturnInstruction
+{
+	Instruction i;
+	
+	Expression *value;
+} ReturnInstruction;
+
+static ReturnInstruction *
+func ReadReturnInstruction(ParseInput *input)
+{
+	ReadTokenId(input, ReturnTokenId);
+	
+	Expression *value = 0;
+	if(!PeekTokenId(input, SemiColonTokenId)) value = ReadExpression(input);
+	
+	// TODO: check that we are in a function definition
+	// TODO: check that it has same type as the return type of current function definition
+	
+	ReturnInstruction *i = ArenaPushType(&input->arena, ReturnInstruction);
+	i->i.id = ReturnInstructionId;
+	
+	i->value = value;
 	return i;
 }
 
@@ -1103,6 +1242,7 @@ func NeedsSemicolon(InstructionId id)
 	switch(id)
 	{
 		case BlockInstructionId: 
+		case IfInstructionId:
 		case ForInstructionId:
 			return false;
 	}
@@ -1122,19 +1262,23 @@ func ReadInstruction(ParseInput *input)
 	{
 		instruction = (Instruction *)ReadIfInstruction(input);
 	}
+	else if(PeekTokenId(input, ReturnTokenId))
+	{
+		instruction = (Instruction *)ReadReturnInstruction(input);
+	}
 	else if(PeekTwoTokenIds(input, NameTokenId, ColonEqualsTokenId))
 	{
 		Token var_name = ReadToken(input);
 		if(VarExists(&input->var_stack, var_name))
 		{
-			SetErrorToken(input, "Variable already exists ", var_name);
+			SetErrorToken(input, "Variable already exists.", var_name);
 		}
 		ReadTokenId(input, ColonEqualsTokenId);
 		
 		Expression *init = ReadExpression(input);
 		if(!init)
 		{
-			SetError(input, "Expected expression after ':='");
+			SetError(input, "Expected expression after ':='.");
 		}
 		
 		if(!init->type)
@@ -1155,6 +1299,36 @@ func ReadInstruction(ParseInput *input)
 		var.type = init->type;
 		PushVar(&input->var_stack, var);
 	}
+	else
+	{
+		Expression *expression = ReadExpression(input);
+		if(!expression) return 0;
+		
+		if(ReadTokenId(input, EqualsTokenId))
+		{
+			Expression *right = ReadExpression(input);
+			if(!right)
+			{
+				SetError(input, "Expected expression after '='.");
+			}
+			
+			if(!TypesEqual(expression->type, right->type))
+			{
+				SetError(input, "Unmatching types for '='.");
+			}
+			
+			AssignInstruction *i = ArenaPushType(&input->arena, AssignInstruction);
+			i->i.id = AssignInstructionId;
+			
+			i->left = expression;
+			i->right = right;
+			instruction = (Instruction *)i;
+		}
+		else
+		{
+			SetError(input, "Unexpected expression.");
+		}
+	}
 	return instruction;
 }
 
@@ -1162,7 +1336,10 @@ static BlockInstruction *
 func ReadBlock(ParseInput *input)
 {
 	BlockInstruction *block = 0;
-	ReadTokenId(input, OpenBracesTokenId);
+	if(!ReadTokenId(input, OpenBracesTokenId))
+	{
+		SetError(input, "Expected '{'");
+	}
 	
 	StackState stack_state = GetStackState(input);
 	
@@ -1471,6 +1648,8 @@ int main(int arg_n, char **arg_v)
 	
 	CodePosition pos = {};
 	pos.at = buffer;
+	pos.row = 1;
+	pos.col = 1;
 	ParseInput input = {};
 	input.pos = &pos;
 	
@@ -1478,6 +1657,8 @@ int main(int arg_n, char **arg_v)
 	
 	input.var_stack.vars = ArenaPushArray(&input.arena, VarStackMaxSize, Var);
 	input.var_stack.size = 0;
+	
+	ReadCodeLines(&input);
 	
 	DefinitionList *def_list = ReadDefinitionList(&input);
 	

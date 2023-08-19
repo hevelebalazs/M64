@@ -3,7 +3,10 @@ func ArrayMin(n : int, A : @int) int
 	min := A[0];
 	for i := 0 to < n
 	{
-		if A[i] < min: min = A[i];
+		if A[i] < min
+		{
+			min = A[i];
+		}
 	}
 	
 	return min;
