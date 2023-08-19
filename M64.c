@@ -56,6 +56,8 @@ typedef enum tdef TokenId
 	CloseParenTokenId,
 	CommaTokenId,
 	ColonTokenId,
+	ColonEqualsTokenId,
+	SemiColonTokenId,
 	AtTokenId,
 	EndOfFileTokenId,
 	CCodeTokenId,
@@ -297,7 +299,22 @@ func ReadToken(ParseInput *input)
 	}
 	else if(pos->at[0] == ':')
 	{
-		token.id = ColonTokenId;
+		if(pos->at[1] == '=')
+		{
+			token.id = ColonEqualsTokenId;
+			token.length = 2;
+			pos->at += 2;
+		}
+		else
+		{
+			token.id = ColonTokenId;
+			token.length = 1;
+			pos->at++;
+		}
+	}
+	else if(pos->at[0] == ';')
+	{
+		token.id = SemiColonTokenId;
 		token.length = 1;
 		pos->at++;
 	}
@@ -424,11 +441,41 @@ func PeekTokenId(ParseInput *input, TokenId id)
 	return (token.id == id);
 }
 
+static bool
+func PeekTwoTokenIds(ParseInput *input, TokenId id1, TokenId id2)
+{
+	CodePosition start_pos = *input->pos;
+	Token token1 = ReadToken(input);
+	Token token2 = ReadToken(input);
+	*input->pos = start_pos;
+
+	return (token1.id == id1 && token2.id == id2);	
+}
+
+typedef enum tdef ExpressionId
+{
+	ArrayIndexExpressionId,
+	IntegerConstantExpressionId,
+	VarExpressionId
+} ExpressionId;
+
+typedef struct tdef Expression
+{
+	ExpressionId id;
+	VarType *type;
+} Expression;
+
+static Expression *
+func ReadExpression(ParseInput *input)
+{
+	// TODO: finish this
+	return 0;
+}
+
 typedef enum tdef InstructionId
 {
-	NoInstructionId,
-	
-	BlockInstructionId
+	BlockInstructionId,
+	CreateVariableInstructionId
 } InstructionId;
 
 typedef struct tdef Instruction
@@ -443,6 +490,15 @@ typedef struct tdef BlockInstruction
 
 	Instruction *first;
 } BlockInstruction;
+
+typedef struct tdef CreateVariableInstruction
+{
+	Instruction i;
+	
+	Token name;
+	VarType *type;
+	Expression *init;
+} CreateVariableInstruction;
 
 typedef enum tdef DefinitionId
 {
@@ -619,11 +675,125 @@ func ReadNameList(ParseInput *input)
 	return list;
 }
 
+typedef struct tdef StackState
+{
+	int var_stack_size;
+} StackState;
+
+static StackState
+func GetStackState(ParseInput *input)
+{
+	StackState state = {};
+	state.var_stack_size = input->var_stack.size;
+	return state;
+}
+
+static void
+func SetStackState(ParseInput *input, StackState state)
+{
+	input->var_stack.size = state.var_stack_size;
+}
+
+static bool
+func NeedsSemicolon(InstructionId id)
+{
+	switch(id)
+	{
+		case BlockInstructionId: 
+			return true;
+	}
+	
+	return true;
+}
+
+static Instruction *
+func ReadInstruction(ParseInput *input)
+{
+	Instruction *instruction = 0;
+	if(PeekTwoTokenIds(input, NameTokenId, ColonEqualsTokenId))
+	{
+		Token var_name = ReadToken(input);
+		if(VarExists(&input->var_stack, var_name))
+		{
+			SetErrorToken(input, "Variable already exists ", var_name);
+		}
+		ReadTokenId(input, ColonEqualsTokenId);
+		
+		Expression *init = ReadExpression(input);
+		if(!init)
+		{
+			SetError(input, "Expected expression after ':='");
+		}
+		
+		if(!init->type)
+		{
+			SetError(input, "Expression for variable initialization doesn't have type.");
+		}
+		
+		CreateVariableInstruction *cv = ArenaPushType(&input->arena, CreateVariableInstruction);
+		cv->i.id = CreateVariableInstructionId;
+		cv->i.next = 0;
+		cv->name = var_name;
+		cv->init = init;
+		cv->type = init->type;
+		instruction = (Instruction *)cv;
+		
+		Var var = {};
+		var.name = var_name;
+		var.type = init->type;
+		PushVar(&input->var_stack, var);
+	}
+	return instruction;
+}
+
 static BlockInstruction *
 func ReadBlock(ParseInput *input)
 {
-	// TODO: finish this
-	return 0;
+	BlockInstruction *block = 0;
+	ReadTokenId(input, OpenBracesTokenId);
+	
+	StackState stack_state = GetStackState(input);
+	
+	Instruction *first_instruction = 0;
+	Instruction *last_instruction = 0;
+	while(1)
+	{
+		if(ReadTokenId(input, CloseBracesTokenId)) break;
+		
+		Instruction *instruction = ReadInstruction(input);
+		
+		if(!instruction) break;
+		
+		if(NeedsSemicolon(instruction->id))
+		{
+			if(!ReadTokenId(input, SemiColonTokenId))
+			{
+				SetError(input, "Expected ';' after instruction.");
+			}
+		}
+		
+		if(!first_instruction)
+		{
+			first_instruction = instruction;
+			last_instruction = instruction;
+			last_instruction->next = 0;
+		}
+		else
+		{
+			last_instruction->next = instruction;
+			last_instruction = instruction;
+			last_instruction->next = 0;
+		}
+	}
+	
+	block = ArenaPushType(&input->arena, BlockInstruction);
+	block->i.id = BlockInstructionId;
+	block->i.next = 0;
+	block->first = first_instruction;
+	
+	SetStackState(input, stack_state);
+	
+	return block;
 }
 
 typedef struct tdef FuncParam
