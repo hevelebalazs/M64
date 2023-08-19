@@ -2,6 +2,7 @@
 #include <stdlib.h>
 
 #define func
+#define decl
 #define tdef
 
 #define bool int
@@ -49,20 +50,28 @@ typedef struct tdef CodePosition
 typedef enum tdef TokenId
 {
 	UnknownTokenId,
-	PoundCCodeTokenId,
-	OpenBracesTokenId,
+	
+	AtTokenId,
+	CCodeTokenId,
 	CloseBracesTokenId,
-	OpenParenTokenId,
+	CloseBracketsTokenId,
 	CloseParenTokenId,
 	CommaTokenId,
-	ColonTokenId,
 	ColonEqualsTokenId,
-	SemiColonTokenId,
-	AtTokenId,
+	ColonTokenId,
 	EndOfFileTokenId,
-	CCodeTokenId,
+	ForTokenId,
 	FuncTokenId,
-	NameTokenId
+	IfTokenId,
+	IntegerConstantTokenId,
+	LessThanTokenId,
+	NameTokenId,
+	OpenBracesTokenId,
+	OpenBracketsTokenId,
+	OpenParenTokenId,
+	PoundCCodeTokenId,
+	SemiColonTokenId,
+	ToTokenId
 } TokenId;
 
 typedef struct tdef Token
@@ -89,6 +98,54 @@ typedef struct tdef Var
 	VarType *type;
 	Token name;
 } Var;
+
+typedef enum tdef BaseVarTypeId
+{
+	BoolBaseTypeId,
+	Int32BaseTypeId
+} BaseVarTypeId;
+
+typedef struct tdef BaseType
+{
+	VarType type;
+	
+	BaseVarTypeId base_id;
+} BaseType;
+
+typedef struct tdef PointerType
+{
+	VarType type;
+	
+	VarType *pointed_type;
+} PointerType;
+
+static bool
+func IsBoolType(VarType *type)
+{
+	if(type->id == BaseTypeId)
+	{
+		BaseType *base = (BaseType *)type;
+		return (base->base_id == BoolBaseTypeId);
+	}
+	
+	return false;
+}
+
+static bool
+func IsIntegerType(VarType *type)
+{
+	if(type->id == BaseTypeId)
+	{
+		BaseType *base = (BaseType *)type;
+		switch(base->base_id)
+		{
+			case Int32BaseTypeId:
+				return true;
+		}
+	}
+	
+	return false;
+}
 
 #define VarStackMaxSize 64
 typedef struct tdef VarStack
@@ -279,6 +336,18 @@ func ReadToken(ParseInput *input)
 		token.length = 1;
 		pos->at++;
 	}
+	else if(pos->at[0] == '[')
+	{
+		token.id = OpenBracketsTokenId;
+		token.length = 1;
+		pos->at++;
+	}
+	else if(pos->at[0] == ']')
+	{
+		token.id = CloseBracketsTokenId;
+		token.length = 1;
+		pos->at++;
+	}
 	else if(pos->at[0] == '(')
 	{
 		token.id = OpenParenTokenId;
@@ -288,6 +357,12 @@ func ReadToken(ParseInput *input)
 	else if(pos->at[0] == ')')
 	{
 		token.id = CloseParenTokenId;
+		token.length = 1;
+		pos->at++;
+	}
+	else if(pos->at[0] == '<')
+	{
+		token.id = LessThanTokenId;
 		token.length = 1;
 		pos->at++;
 	}
@@ -339,6 +414,23 @@ func ReadToken(ParseInput *input)
 			token.id = PoundCCodeTokenId;
 		}
 	}
+	else if(IsDigit(pos->at[0]))
+	{
+		while(1)
+		{
+			if(IsDigit(pos->at[0]))
+			{
+				token.length++;
+				pos->at++;
+			}
+			else
+			{
+				break;
+			}
+		}
+		
+		token.id = IntegerConstantTokenId;
+	}
 	else if(IsAlpha(pos->at[0]))
 	{
 		while(IsAlpha(pos->at[0]) || IsDigit(pos->at[0]))
@@ -347,9 +439,21 @@ func ReadToken(ParseInput *input)
 			pos->at++;
 		}
 		
-		if(TokenEquals(token, "func"))
+		if(TokenEquals(token, "for"))
+		{
+			token.id = ForTokenId;
+		}
+		else if(TokenEquals(token, "func"))
 		{
 			token.id = FuncTokenId;
+		}
+		else if(TokenEquals(token, "if"))
+		{
+			token.id = IfTokenId;
+		}
+		else if(TokenEquals(token, "to"))
+		{
+			token.id = ToTokenId;
 		}
 		else
 		{
@@ -452,10 +556,52 @@ func PeekTwoTokenIds(ParseInput *input, TokenId id1, TokenId id2)
 	return (token1.id == id1 && token2.id == id2);	
 }
 
+// TODO: have a static array of base types instead of always pushing it
+static BaseType *
+func PushBaseType(MemoryArena *arena, BaseVarTypeId base_id)
+{
+	BaseType *base_type = ArenaPushType(arena, BaseType);
+	base_type->type.id = BaseTypeId;
+	base_type->base_id = base_id;
+	return base_type;
+}
+
+static Var *
+func GetVar(VarStack *stack, Token name)
+{
+	for(size_t i = 0; i < stack->size; i++)
+	{
+		Var *var = &stack->vars[i];
+		if(TokensEqual(var->name, name)) return var;
+	}
+	return 0;
+}
+
+static bool
+func VarExists(VarStack *stack, Token name)
+{
+	Var *var = GetVar(stack, name);
+	return (var != 0);
+}
+
+static void
+func PushVar(VarStack *stack, Var var)
+{
+	if(stack->size >= VarStackMaxSize)
+	{
+		printf("Var stack is full!\n");
+		return;
+	}
+	
+	stack->vars[stack->size] = var;
+	stack->size++;
+}
+
 typedef enum tdef ExpressionId
 {
 	ArrayIndexExpressionId,
 	IntegerConstantExpressionId,
+	LessThanExpressionId,
 	VarExpressionId
 } ExpressionId;
 
@@ -465,17 +611,247 @@ typedef struct tdef Expression
 	VarType *type;
 } Expression;
 
+typedef struct tdef ArrayIndexExpression
+{
+	Expression e;
+	
+	Expression *array;
+	Expression *index;
+} ArrayIndexExpression;
+
+static ArrayIndexExpression *
+func PushArrayIndexExpression(MemoryArena *arena, Expression *array, Expression *index)
+{
+	ArrayIndexExpression *e = ArenaPushType(arena, ArrayIndexExpression);
+	e->e.id = ArrayIndexExpressionId;
+	e->e.type = 0;
+	if(array->type->id == PointerTypeId)
+	{
+		PointerType *type = (PointerType *)array->type;
+		e->e.type = type->pointed_type;
+	}
+	
+	e->array = array;
+	e->index = index;
+	return e;
+}
+
+typedef struct tdef IntegerConstantExpression
+{
+	Expression e;
+	
+	Token token;
+} IntegerConstantExpression;
+
+static IntegerConstantExpression *
+func PushIntegerConstantExpression(MemoryArena *arena, Token token)
+{
+	IntegerConstantExpression *e = ArenaPushType(arena, IntegerConstantExpression);
+	e->e.id = IntegerConstantExpressionId;
+	e->e.type = (VarType *)PushBaseType(arena, Int32BaseTypeId);
+	
+	e->token = token;
+	return e;
+}
+
+typedef struct tdef LessThanExpression
+{
+	Expression e;
+	
+	Expression *left;
+	Expression *right;
+} LessThanExpression;
+
+static LessThanExpression *
+func PushLessThanExpression(MemoryArena *arena, Expression *left, Expression *right)
+{
+	LessThanExpression *e = ArenaPushType(arena, LessThanExpression);
+	e->e.id = LessThanExpressionId;
+	e->e.type = (VarType *)PushBaseType(arena, BoolBaseTypeId);
+	
+	e->left = left;
+	e->right = right;
+	return e;
+}
+
+typedef struct tdef VarExpression
+{
+	Expression e;
+	
+	Var var;
+} VarExpression;
+
+static VarExpression *
+func PushVarExpression(MemoryArena *arena, Var var)
+{
+	VarExpression *e = ArenaPushType(arena, VarExpression);
+	e->e.id = VarExpressionId;
+	e->e.type = var.type;
+	
+	e->var = var;
+	return e;
+}
+
+static Expression *decl ReadExpression(ParseInput *);
+
+static Expression *
+func ReadNumberLevelExpression(ParseInput *input)
+{
+	Expression *e = 0;
+	if(ReadTokenId(input, IntegerConstantTokenId))
+	{
+		e = (Expression *)PushIntegerConstantExpression(&input->arena, input->last_token);
+	}
+	else if(ReadTokenId(input, NameTokenId))
+	{
+		Token name = input->last_token;
+		if(VarExists(&input->var_stack, name))
+		{
+			Var *var = GetVar(&input->var_stack, name);
+			e = (Expression *)PushVarExpression(&input->arena, *var);
+		}
+	}
+	else
+	{
+		Token token = ReadToken(input);
+		SetErrorToken(input, "Unknown expression ", token);
+	}
+	
+	while(1)
+	{
+		if(ReadTokenId(input, OpenBracketsTokenId))
+		{
+			if(!e || !e->type || e->type->id != PointerTypeId)
+			{
+				SetError(input, "Cannot index non-array expression.");
+				continue;
+			}
+			
+			Expression *index = ReadExpression(input);
+			if(!index || !IsIntegerType(index->type))
+			{
+				SetError(input, "Array index is not integer.");
+				continue;
+			}
+			
+			if(!ReadTokenId(input, CloseBracketsTokenId))
+			{
+				SetError(input, "Missing ']'.");
+			}
+			
+			e = (Expression *)PushArrayIndexExpression(&input->arena, e, index);
+		}
+		else
+		{
+			break;
+		}
+	}
+	
+	return e;
+}
+
+static Expression *
+func ReadBitLevelExpression(ParseInput *input)
+{
+	Expression *e = ReadNumberLevelExpression(input);
+	return e;
+}
+
+static Expression *
+func ReadProductLevelExpression(ParseInput *input)
+{
+	Expression *e = ReadBitLevelExpression(input);
+	return e;
+}
+
+static Expression *
+func ReadSumLevelExpression(ParseInput *input)
+{
+	Expression *e = ReadProductLevelExpression(input);
+	return e;
+}
+
+static bool
+func TypesEqual(VarType *type1, VarType *type2)
+{
+	if(!type1 || !type2) return (type1 == type2);
+	
+	if(type1->id != type2->id) return false;
+	
+	switch(type1->id)
+	{
+		case BaseTypeId:
+		{
+			BaseType *base1 = (BaseType *)type1;
+			BaseType *base2 = (BaseType *)type2;
+			return base1->base_id == base2->base_id;
+		}
+	}
+	
+	return true;
+}
+
+static Expression *
+func ReadCompareLevelExpression(ParseInput *input)
+{
+	Expression *e = ReadSumLevelExpression(input);
+	while(1)
+	{
+		if(ReadTokenId(input, LessThanTokenId))
+		{
+			Expression *right = ReadSumLevelExpression(input);
+			if(!right)
+			{
+				SetError(input, "Expected expression after '<'.");
+			}
+			if(!TypesEqual(e->type, right->type))
+			{
+				SetError(input, "Types do not match for '<'.");
+			}
+			
+			e = (Expression *)PushLessThanExpression(&input->arena, e, right);
+		}
+		else
+		{
+			break;
+		}
+	}
+	
+	return e;
+}
+
 static Expression *
 func ReadExpression(ParseInput *input)
 {
-	// TODO: finish this
-	return 0;
+	Expression *e = ReadCompareLevelExpression(input);
+	return e;
+}
+
+typedef struct tdef StackState
+{
+	int var_stack_size;
+} StackState;
+
+static StackState
+func GetStackState(ParseInput *input)
+{
+	StackState state = {};
+	state.var_stack_size = input->var_stack.size;
+	return state;
+}
+
+static void
+func SetStackState(ParseInput *input, StackState state)
+{
+	input->var_stack.size = state.var_stack_size;
 }
 
 typedef enum tdef InstructionId
 {
 	BlockInstructionId,
-	CreateVariableInstructionId
+	CreateVariableInstructionId,
+	IfInstructionId,
+	ForInstructionId
 } InstructionId;
 
 typedef struct tdef Instruction
@@ -491,6 +867,8 @@ typedef struct tdef BlockInstruction
 	Instruction *first;
 } BlockInstruction;
 
+static BlockInstruction * decl ReadBlock(ParseInput *);
+
 typedef struct tdef CreateVariableInstruction
 {
 	Instruction i;
@@ -499,6 +877,108 @@ typedef struct tdef CreateVariableInstruction
 	VarType *type;
 	Expression *init;
 } CreateVariableInstruction;
+
+typedef struct tdef IfInstruction
+{
+	Instruction i;
+	
+	Expression *condition;
+	BlockInstruction *body;
+} IfInstruction;
+
+static IfInstruction *
+func ReadIfInstruction(ParseInput *input)
+{
+	StackState stack_state = GetStackState(input);
+	
+	ReadTokenId(input, IfTokenId);
+	Expression *condition = ReadExpression(input);
+	if(!condition || !condition->type || !IsBoolType(condition->type))
+	{
+		SetError(input, "Expected bool expression after 'if'.");
+	}
+	
+	BlockInstruction *body = ReadBlock(input);
+	
+	IfInstruction *i = ArenaPushType(&input->arena, IfInstruction);
+	i->i.id = IfInstructionId;
+	i->i.next = 0;
+	
+	i->condition = condition;
+	i->body = body;
+	
+	SetStackState(input, stack_state);
+	return i;
+}
+
+typedef struct tdef ForInstruction
+{
+	Instruction i;
+	
+	Var index_var;
+	Expression *from;
+	Expression *to;
+	bool less_than;
+	BlockInstruction *body;
+} ForInstruction;
+
+static ForInstruction *
+func ReadForInstruction(ParseInput *input)
+{
+	StackState stack_state = GetStackState(input);
+	
+	ReadTokenId(input, ForTokenId);
+	
+	if(!ReadTokenId(input, NameTokenId))
+	{
+		SetError(input, "Expected index variable name after 'for'.");
+		return 0;		
+	}
+	
+	Token index_var_name = input->last_token;
+
+	if(ReadTokenId(input, ColonEqualsTokenId))
+	{
+		if(VarExists(&input->var_stack, index_var_name))
+		{
+			SetErrorToken(input, "Variable already exists ", index_var_name);
+		}
+	}
+	
+	Expression *from = ReadExpression(input);
+	if(!from || !from->type || !IsIntegerType(from->type))
+	{
+		SetError(input, "Start expression for 'for' is not integer.");
+	}
+	
+	if(!ReadTokenId(input, ToTokenId))
+	{
+		SetError(input, "Expected 'to'.");
+	}
+	
+	bool less_than = ReadTokenId(input, LessThanTokenId);
+	
+	Expression *to = ReadExpression(input);
+	if(!to || !TypesEqual(from->type, to->type))
+	{
+		SetError(input, "Start and to expression for 'for' have different type.");
+	}
+	
+	ForInstruction *i = ArenaPushType(&input->arena, ForInstruction);
+	i->i.id = ForInstructionId;
+	i->i.next = 0;
+	i->index_var.name = index_var_name;
+	i->index_var.type = from->type;
+	i->from = from;
+	i->to = to;
+	i->less_than = less_than;
+	i->body = ReadBlock(input);
+	
+	PushVar(&input->var_stack, i->index_var);
+	
+	SetStackState(input, stack_state);
+	return i;
+}
 
 typedef enum tdef DefinitionId
 {
@@ -551,13 +1031,6 @@ func ReadCCodeDefinition(ParseInput *input)
 	return def;
 }
 
-typedef struct tdef PointerType
-{
-	VarType type;
-	
-	VarType *pointed_type;
-} PointerType;
-
 static PointerType *
 func PushPointerType(MemoryArena *arena, VarType *pointed_type)
 {
@@ -565,28 +1038,6 @@ func PushPointerType(MemoryArena *arena, VarType *pointed_type)
 	type->type.id = PointerTypeId;
 	type->pointed_type = pointed_type;
 	return type;
-}
-
-typedef enum tdef BaseVarTypeId
-{
-	Int32BaseTypeId
-} BaseVarTypeId;
-
-typedef struct tdef BaseType
-{
-	VarType type;
-	
-	BaseVarTypeId base_id;
-} BaseType;
-
-// TODO: have a static array of base types instead of always pushing it
-static BaseType *
-func PushBaseType(MemoryArena *arena, BaseVarTypeId base_id)
-{
-	BaseType *base_type = ArenaPushType(arena, BaseType);
-	base_type->type.id = BaseTypeId;
-	base_type->base_id = base_id;
-	return base_type;
 }
 
 static VarType *
@@ -611,37 +1062,8 @@ func ReadVarType(ParseInput *input)
 			type = (VarType *)PushBaseType(&input->arena, Int32BaseTypeId);
 		}
 	}
-}
-
-static Var *
-func GetVar(VarStack *stack, Token name)
-{
-	for(size_t i = 0; i < stack->size; i++)
-	{
-		Var *var = &stack->vars[i];
-		if(TokensEqual(var->name, name)) return var;
-	}
-	return 0;
-}
-
-static bool
-func VarExists(VarStack *stack, Token name)
-{
-	Var *var = GetVar(stack, name);
-	return (var != 0);
-}
-
-static void
-func PushVar(VarStack *stack, Var var)
-{
-	if(stack->size >= VarStackMaxSize)
-	{
-		printf("Var stack is full!\n");
-		return;
-	}
 	
-	stack->vars[stack->size] = var;
-	stack->size++;
+	return type;
 }
 
 typedef struct tdef NameList
@@ -675,32 +1097,14 @@ func ReadNameList(ParseInput *input)
 	return list;
 }
 
-typedef struct tdef StackState
-{
-	int var_stack_size;
-} StackState;
-
-static StackState
-func GetStackState(ParseInput *input)
-{
-	StackState state = {};
-	state.var_stack_size = input->var_stack.size;
-	return state;
-}
-
-static void
-func SetStackState(ParseInput *input, StackState state)
-{
-	input->var_stack.size = state.var_stack_size;
-}
-
 static bool
 func NeedsSemicolon(InstructionId id)
 {
 	switch(id)
 	{
 		case BlockInstructionId: 
-			return true;
+		case ForInstructionId:
+			return false;
 	}
 	
 	return true;
@@ -710,7 +1114,15 @@ static Instruction *
 func ReadInstruction(ParseInput *input)
 {
 	Instruction *instruction = 0;
-	if(PeekTwoTokenIds(input, NameTokenId, ColonEqualsTokenId))
+	if(PeekTokenId(input, ForTokenId))
+	{
+		instruction = (Instruction *)ReadForInstruction(input);
+	}
+	else if(PeekTokenId(input, IfTokenId))
+	{
+		instruction = (Instruction *)ReadIfInstruction(input);
+	}
+	else if(PeekTwoTokenIds(input, NameTokenId, ColonEqualsTokenId))
 	{
 		Token var_name = ReadToken(input);
 		if(VarExists(&input->var_stack, var_name))
@@ -888,8 +1300,7 @@ func ReadFuncHeader(ParseInput *input)
 		}
 	}
 	
-	VarType *return_type = 0;
-	if(ReadTokenId(input, ColonTokenId)) return_type = ReadVarType(input);
+	VarType *return_type = ReadVarType(input);
 	
 	FuncHeader header = {};
 	header.name = name;
