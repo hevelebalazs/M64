@@ -180,6 +180,7 @@ typedef struct tdef ParseInput
 typedef struct tdef Output
 {
 	MemoryArena arena;
+	size_t tabs;
 } Output;
 
 static char *
@@ -1574,6 +1575,15 @@ func WriteChar(Output *output, char c)
 	*mem = c;
 }
 
+static void
+func WriteTabs(Output *output)
+{
+	for(size_t i = 0; i < 4 * output->tabs; i++)
+	{
+		WriteChar(output, ' ');
+	}
+}
+
 static void 
 func WriteString(Output *output, char* string)
 {
@@ -1714,6 +1724,7 @@ func WriteInstruction(Output *output, Instruction *instruction)
 		case AssignInstructionId:
 		{
 			AssignInstruction *i = (AssignInstruction *)instruction;
+			WriteTabs(output);
 			WriteExpression(output, i->left);
 			WriteString(output, " = ");
 			WriteExpression(output, i->right);
@@ -1729,6 +1740,7 @@ func WriteInstruction(Output *output, Instruction *instruction)
 		case CreateVariableInstructionId:
 		{
 			CreateVariableInstruction *i = (CreateVariableInstruction *)instruction;
+			WriteTabs(output);
 			WriteTypeAndVar(output, i->type, i->name);
 			WriteString(output, " = ");
 			if(i->init)
@@ -1745,6 +1757,7 @@ func WriteInstruction(Output *output, Instruction *instruction)
 		case IfInstructionId:
 		{
 			IfInstruction *i = (IfInstruction *)instruction;
+			WriteTabs(output);
 			WriteString(output, "if(");
 			WriteExpression(output, i->condition);
 			WriteString(output, ")\n");
@@ -1757,6 +1770,7 @@ func WriteInstruction(Output *output, Instruction *instruction)
 		{
 			ForInstruction *i = (ForInstruction *)instruction;
 			
+			WriteTabs(output);
 			WriteString(output, "for (");
 			WriteTypeAndVar(output, i->index_var.type, i->index_var.name);
 			WriteString(output, " = ");
@@ -1779,6 +1793,7 @@ func WriteInstruction(Output *output, Instruction *instruction)
 		case ReturnInstructionId:
 		{
 			ReturnInstruction *i = (ReturnInstruction *)instruction;
+			WriteTabs(output);
 			WriteString(output, "return ");
 			WriteExpression(output, i->value);
 			WriteString(output, ";\n");
@@ -1790,7 +1805,10 @@ func WriteInstruction(Output *output, Instruction *instruction)
 static void
 func WriteBlock(Output *output, BlockInstruction *block)
 {
+	WriteTabs(output);
 	WriteString(output, "{\n");
+	
+	output->tabs++;
 	
 	Instruction *instruction = block->first;
 	while(instruction)
@@ -1799,6 +1817,9 @@ func WriteBlock(Output *output, BlockInstruction *block)
 		instruction = instruction->next;
 	}
 	
+	output->tabs--;
+	
+	WriteTabs(output);
 	WriteString(output, "}\n");
 }
 
@@ -1889,6 +1910,7 @@ int main(int arg_n, char **arg_v)
 	
 	Output output = {};
 	output.arena = CreateArena((size_t)64 * 1024);
+	output.tabs = 0;
 	WriteDefinitionList(&output, def_list);
 	
 	for(size_t i = 0; i < output.arena.used_size; i++)
