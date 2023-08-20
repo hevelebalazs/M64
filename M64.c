@@ -1036,6 +1036,8 @@ typedef struct tdef ForInstruction
 	BlockInstruction *body;
 } ForInstruction;
 
+// TODO: simplify for instructions, only standard for loop for now:
+	// for init-instruction; condition-expression; increment-instruction block
 static ForInstruction *
 func ReadForInstruction(ParseInput *input)
 {
@@ -1666,9 +1668,137 @@ func WriteFuncHeader(Output *output, FuncHeader *header)
 }
 
 static void
-WriteBlock(Output *output, BlockInstruction *block)
+func WriteExpression(Output *output, Expression *expression)
+{
+	switch(expression->id)
+	{
+		case ArrayIndexExpressionId:
+		{
+			ArrayIndexExpression *e = (ArrayIndexExpression *)expression;
+			WriteExpression(output, e->array);
+			WriteString(output, "[");
+			WriteExpression(output, e->index);
+			WriteString(output, "]");
+			break;
+		}
+		case IntegerConstantExpressionId:
+		{
+			IntegerConstantExpression *e = (IntegerConstantExpression *)expression;
+			WriteToken(output, e->token);
+			break;
+		}
+		case LessThanExpressionId:
+		{
+			LessThanExpression *e = (LessThanExpression *)expression;
+			WriteExpression(output, e->left);
+			WriteString(output, " < ");
+			WriteExpression(output, e->right);
+			break;
+		}
+		case VarExpressionId:
+		{
+			VarExpression *e = (VarExpression *)expression;
+			WriteToken(output, e->var.name);
+			break;
+		}
+	}
+}
+
+static void func WriteBlock(Output *, BlockInstruction *);
+
+static void
+func WriteInstruction(Output *output, Instruction *instruction)
+{
+	switch(instruction->id)
+	{
+		case AssignInstructionId:
+		{
+			AssignInstruction *i = (AssignInstruction *)instruction;
+			WriteExpression(output, i->left);
+			WriteString(output, " = ");
+			WriteExpression(output, i->right);
+			WriteString(output, ";\n");
+			break;
+		}
+		case BlockInstructionId:
+		{
+			BlockInstruction *i = (BlockInstruction *)instruction;
+			WriteBlock(output, i);
+			break;
+		}
+		case CreateVariableInstructionId:
+		{
+			CreateVariableInstruction *i = (CreateVariableInstruction *)instruction;
+			WriteTypeAndVar(output, i->type, i->name);
+			WriteString(output, " = ");
+			if(i->init)
+			{
+				WriteExpression(output, i->init);
+			}
+			else
+			{
+				WriteString(output, "{}");
+			}
+			WriteString(output, ";\n");
+			break;
+		}
+		case IfInstructionId:
+		{
+			IfInstruction *i = (IfInstruction *)instruction;
+			WriteString(output, "if(");
+			WriteExpression(output, i->condition);
+			WriteString(output, ")\n");
+			
+			WriteBlock(output, i->body);
+			
+			break;
+		}
+		case ForInstructionId:
+		{
+			ForInstruction *i = (ForInstruction *)instruction;
+			
+			WriteString(output, "for (");
+			WriteTypeAndVar(output, i->index_var.type, i->index_var.name);
+			WriteString(output, " = ");
+			WriteExpression(output, i->from);
+			WriteString(output, "; ");
+			
+			WriteToken(output, i->index_var.name);
+			if(i->less_than) WriteString(output, " < ");
+			else WriteString(output, " <= ");
+			WriteExpression(output, i->to);
+			WriteString(output, "; ");
+			
+			WriteToken(output, i->index_var.name);
+			WriteString(output, "++)\n");
+			
+			WriteBlock(output, i->body);
+			
+			break;
+		}
+		case ReturnInstructionId:
+		{
+			ReturnInstruction *i = (ReturnInstruction *)instruction;
+			WriteString(output, "return ");
+			WriteExpression(output, i->value);
+			WriteString(output, ";\n");
+			break;
+		}
+	}
+}
+
+static void
+func WriteBlock(Output *output, BlockInstruction *block)
 {
 	WriteString(output, "{\n");
+	
+	Instruction *instruction = block->first;
+	while(instruction)
+	{
+		WriteInstruction(output, instruction);
+		instruction = instruction->next;
+	}
+	
 	WriteString(output, "}\n");
 }
 

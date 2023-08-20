@@ -41,8 +41,8 @@ func ArrayMin(n : int, A : @int) int
 			
 			int min = ArrayMin(n, A);
 			printf("min=%i\n", min);
-			
 			break;
+			
 		}
 		
 		return 0;

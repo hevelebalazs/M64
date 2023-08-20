@@ -6,16 +6,10 @@ struct List
 
 #for in List (E : #Expression)
 {
-	elem := #ContainerAddress#;
-	i := 0;
-	while elem
+	for elem := #ContainerAddress#; elem; elem = elem->next
 	{
 		#ForIterator# := elem.value;
-		#ForIndex# := i;
 		E;
-		
-		i++;
-		elem = elem.next;
 	}
 }
 
