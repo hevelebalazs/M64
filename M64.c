@@ -118,6 +118,15 @@ typedef struct tdef BaseType
 	BaseVarTypeId base_id;
 } BaseType;
 
+static BaseType
+func BaseTypeInit(BaseVarTypeId id)
+{
+	BaseType type = {};
+	type.type.id = BaseTypeId;
+	type.base_id = id;
+	return type;
+}
+
 typedef struct tdef PointerType
 {
 	VarType type;
@@ -166,6 +175,8 @@ typedef struct tdef CodeLine
 	size_t length;
 } CodeLine;
 
+struct decl VarType;
+
 typedef struct tdef ParseInput
 {
 	MemoryArena arena;
@@ -175,6 +186,9 @@ typedef struct tdef ParseInput
 	VarStack var_stack;
 	bool any_error;
 	Token last_token;
+	
+	VarType *int_type;
+	VarType *bool_type;
 } ParseInput;
 
 typedef struct tdef Output
@@ -650,16 +664,6 @@ func PeekTwoTokenIds(ParseInput *input, TokenId id1, TokenId id2)
 	return (token1.id == id1 && token2.id == id2);	
 }
 
-// TODO: have a static array of base types instead of always pushing it
-static BaseType *
-func PushBaseType(MemoryArena *arena, BaseVarTypeId base_id)
-{
-	BaseType *base_type = ArenaPushType(arena, BaseType);
-	base_type->type.id = BaseTypeId;
-	base_type->base_id = base_id;
-	return base_type;
-}
-
 static Var *
 func GetVar(VarStack *stack, Token name)
 {
@@ -738,11 +742,11 @@ typedef struct tdef IntegerConstantExpression
 } IntegerConstantExpression;
 
 static IntegerConstantExpression *
-func PushIntegerConstantExpression(MemoryArena *arena, Token token)
+func PushIntegerConstantExpression(MemoryArena *arena, Token token, VarType *int_type)
 {
 	IntegerConstantExpression *e = ArenaPushType(arena, IntegerConstantExpression);
 	e->e.id = IntegerConstantExpressionId;
-	e->e.type = (VarType *)PushBaseType(arena, Int32BaseTypeId);
+	e->e.type = int_type;
 	
 	e->token = token;
 	return e;
@@ -757,11 +761,11 @@ typedef struct tdef LessThanExpression
 } LessThanExpression;
 
 static LessThanExpression *
-func PushLessThanExpression(MemoryArena *arena, Expression *left, Expression *right)
+func PushLessThanExpression(MemoryArena *arena, Expression *left, Expression *right, VarType *bool_type)
 {
 	LessThanExpression *e = ArenaPushType(arena, LessThanExpression);
 	e->e.id = LessThanExpressionId;
-	e->e.type = (VarType *)PushBaseType(arena, BoolBaseTypeId);
+	e->e.type = bool_type;
 	
 	e->left = left;
 	e->right = right;
@@ -794,7 +798,7 @@ func ReadNumberLevelExpression(ParseInput *input)
 	Expression *e = 0;
 	if(ReadTokenId(input, IntegerConstantTokenId))
 	{
-		e = (Expression *)PushIntegerConstantExpression(&input->arena, input->last_token);
+		e = (Expression *)PushIntegerConstantExpression(&input->arena, input->last_token, input->int_type);
 	}
 	else if(ReadTokenId(input, NameTokenId))
 	{
@@ -914,7 +918,7 @@ func ReadCompareLevelExpression(ParseInput *input)
 				SetError(input, "Types do not match for '<'.");
 			}
 			
-			e = (Expression *)PushLessThanExpression(&input->arena, e, right);
+			e = (Expression *)PushLessThanExpression(&input->arena, e, right, input->bool_type);
 		}
 		else
 		{
@@ -1201,7 +1205,7 @@ func ReadVarType(ParseInput *input)
 	{
 		if(TokenEquals(input->last_token, "int"))
 		{
-			type = (VarType *)PushBaseType(&input->arena, Int32BaseTypeId);
+			type = input->int_type;
 		}
 	}
 	
@@ -1901,6 +1905,16 @@ int main(int arg_n, char **arg_v)
 	
 	input.var_stack.vars = ArenaPushArray(&input.arena, VarStackMaxSize, Var);
 	input.var_stack.size = 0;
+	
+	BaseType *int_base = ArenaPushType(&input.arena, BaseType);
+	int_base->type.id = BaseTypeId;
+	int_base->base_id = Int32BaseTypeId;
+	input.int_type = (VarType *)int_base;
+	
+	BaseType *bool_base = ArenaPushType(&input.arena, BaseType);
+	bool_base->type.id = BaseTypeId;
+	bool_base->base_id = BoolBaseTypeId;
+	input.bool_type = (VarType *)bool_base;
 	
 	ReadCodeLines(&input);
 	
