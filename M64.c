@@ -72,6 +72,7 @@ typedef enum tdef TokenId
 	OpenBracesTokenId,
 	OpenBracketsTokenId,
 	OpenParenTokenId,
+	PlusPlusTokenId,
 	PoundCCodeTokenId,
 	ReturnTokenId,
 	SemiColonTokenId,
@@ -501,6 +502,12 @@ func ReadToken(ParseInput *input)
 		token.id = AtTokenId;
 		token.length = 1;
 		pos->at++;
+	}
+	else if(pos->at[0] == '+' && pos->at[1] == '+')
+	{
+		token.id = PlusPlusTokenId;
+		pos->at += 2;
+		token.length = 2;
 	}
 	else if(pos->at[0] == '#')
 	{
@@ -961,6 +968,7 @@ typedef enum tdef InstructionId
 	BlockInstructionId,
 	CreateVariableInstructionId,
 	IfInstructionId,
+	IncrementInstructionId,
 	ForInstructionId,
 	ReturnInstructionId
 } InstructionId;
@@ -1030,19 +1038,61 @@ func ReadIfInstruction(ParseInput *input)
 	return i;
 }
 
+typedef struct tdef IncrementInstruction
+{
+	Instruction i;
+	
+	Expression *value;
+} IncrementInstruction;
+
 typedef struct tdef ForInstruction
 {
 	Instruction i;
 	
-	Var index_var;
-	Expression *from;
-	Expression *to;
-	bool less_than;
+	Instruction *init;
+	Expression *condition;
+	Instruction *update;
+	
 	BlockInstruction *body;
 } ForInstruction;
 
-// TODO: simplify for instructions, only standard for loop for now:
-	// for init-instruction; condition-expression; increment-instruction block
+static bool
+func IsValidInitInstruction(Instruction *instruction)
+{
+	if(!instruction) return false;
+	
+	switch(instruction->id)
+	{
+		case BlockInstructionId:
+		case IfInstructionId:
+		case ForInstructionId:
+		case ReturnInstructionId:
+			return false;
+	}
+	
+	return true;
+}
+
+static bool
+func IsValidUpdateInstruction(Instruction *instruction)
+{
+	if(!instruction) return true;
+	
+	switch(instruction->id)
+	{
+		case BlockInstructionId:
+		case IfInstructionId:
+		case ForInstructionId:
+		case ReturnInstructionId:
+		case CreateVariableInstructionId:
+			return false;		
+	}
+	
+	return true;
+}
+
+static Instruction * decl ReadInstruction(ParseInput *);
+
 static ForInstruction *
 func ReadForInstruction(ParseInput *input)
 {
@@ -1050,53 +1100,51 @@ func ReadForInstruction(ParseInput *input)
 	
 	ReadTokenId(input, ForTokenId);
 	
-	if(!ReadTokenId(input, NameTokenId))
+	Instruction *init = ReadInstruction(input);
+	if(!IsValidInitInstruction(init))
 	{
-		SetError(input, "Expected index variable name after 'for'.");
-		return 0;		
+		SetError(input, "Invalid init instruction after 'for'.");
 	}
 	
-	Token index_var_name = input->last_token;
-
-	if(ReadTokenId(input, ColonEqualsTokenId))
+	if(!ReadTokenId(input, SemiColonTokenId))
 	{
-		if(VarExists(&input->var_stack, index_var_name))
-		{
-			SetErrorToken(input, "Variable already exists ", index_var_name);
-		}
+		SetError(input, "Expected ';' after init instruction for 'for' loop.");
 	}
 	
-	Expression *from = ReadExpression(input);
-	if(!from || !from->type || !IsIntegerType(from->type))
+	Expression *condition = ReadExpression(input);
+	if(!condition)
 	{
-		SetError(input, "Start expression for 'for' is not integer.");
+		SetError(input, "Expected condition for 'for' loop.");
+	}
+	else if(condition->type != input->bool_type)
+	{
+		SetError(input, "Condition for 'for' loop not boolean.");
 	}
 	
-	if(!ReadTokenId(input, ToTokenId))
+	if(!ReadTokenId(input, SemiColonTokenId))
 	{
-		SetError(input, "Expected 'to'.");
+		SetError(input, "Expected ';' after condition for 'for' loop.");
 	}
 	
-	bool less_than = ReadTokenId(input, LessThanTokenId);
-	
-	Expression *to = ReadExpression(input);
-	if(!to || !TypesEqual(from->type, to->type))
+	Instruction *update = 0;
+	if(!PeekTokenId(input, OpenBracesTokenId))
 	{
-		SetError(input, "Start and to expression for 'for' have different type.");
+		update = ReadInstruction(input);
+	}
+	
+	if(!IsValidUpdateInstruction(update))
+	{
+		SetError(input, "Invalid update instruction for 'for' loop.");
 	}
 	
 	ForInstruction *i = ArenaPushType(&input->arena, ForInstruction);
 	i->i.id = ForInstructionId;
-	i->i.next = 0;
-	i->index_var.name = index_var_name;
-	i->index_var.type = from->type;
-	i->from = from;
-	i->to = to;
-	i->less_than = less_than;
+	i->init = init;
+	i->condition = condition;
+	i->update = update;
 	
-	PushVar(&input->var_stack, i->index_var);
 	i->body = ReadBlock(input);
-	
+		
 	SetStackState(input, stack_state);
 	return i;
 }
@@ -1329,6 +1377,20 @@ func ReadInstruction(ParseInput *input)
 			
 			i->left = expression;
 			i->right = right;
+			instruction = (Instruction *)i;
+		}
+		else if(ReadTokenId(input, PlusPlusTokenId))
+		{
+			// TODO: check that expression is modifiable!
+			if(!TypesEqual(expression->type, input->int_type))
+			{
+				SetError(input, "Invalid type for '++'.");
+			}
+			
+			IncrementInstruction *i = ArenaPushType(&input->arena, IncrementInstruction);
+			i->i.id = IncrementInstructionId;
+			
+			i->value = expression;
 			instruction = (Instruction *)i;
 		}
 		else
@@ -1728,11 +1790,9 @@ func WriteInstruction(Output *output, Instruction *instruction)
 		case AssignInstructionId:
 		{
 			AssignInstruction *i = (AssignInstruction *)instruction;
-			WriteTabs(output);
 			WriteExpression(output, i->left);
 			WriteString(output, " = ");
 			WriteExpression(output, i->right);
-			WriteString(output, ";\n");
 			break;
 		}
 		case BlockInstructionId:
@@ -1744,7 +1804,6 @@ func WriteInstruction(Output *output, Instruction *instruction)
 		case CreateVariableInstructionId:
 		{
 			CreateVariableInstruction *i = (CreateVariableInstruction *)instruction;
-			WriteTabs(output);
 			WriteTypeAndVar(output, i->type, i->name);
 			WriteString(output, " = ");
 			if(i->init)
@@ -1755,13 +1814,11 @@ func WriteInstruction(Output *output, Instruction *instruction)
 			{
 				WriteString(output, "{}");
 			}
-			WriteString(output, ";\n");
 			break;
 		}
 		case IfInstructionId:
 		{
 			IfInstruction *i = (IfInstruction *)instruction;
-			WriteTabs(output);
 			WriteString(output, "if(");
 			WriteExpression(output, i->condition);
 			WriteString(output, ")\n");
@@ -1770,25 +1827,28 @@ func WriteInstruction(Output *output, Instruction *instruction)
 			
 			break;
 		}
+		case IncrementInstructionId:
+		{
+			IncrementInstruction *i = (IncrementInstruction *)instruction;
+			WriteExpression(output, i->value);
+			
+			WriteString(output, "++");
+			
+			break;
+		}
 		case ForInstructionId:
 		{
 			ForInstruction *i = (ForInstruction *)instruction;
 			
-			WriteTabs(output);
-			WriteString(output, "for (");
-			WriteTypeAndVar(output, i->index_var.type, i->index_var.name);
-			WriteString(output, " = ");
-			WriteExpression(output, i->from);
+			WriteString(output, "for(");
+			WriteInstruction(output, i->init);
 			WriteString(output, "; ");
 			
-			WriteToken(output, i->index_var.name);
-			if(i->less_than) WriteString(output, " < ");
-			else WriteString(output, " <= ");
-			WriteExpression(output, i->to);
+			WriteExpression(output, i->condition);
 			WriteString(output, "; ");
 			
-			WriteToken(output, i->index_var.name);
-			WriteString(output, "++)\n");
+			WriteInstruction(output, i->update);
+			WriteString(output, ")\n");
 			
 			WriteBlock(output, i->body);
 			
@@ -1797,10 +1857,8 @@ func WriteInstruction(Output *output, Instruction *instruction)
 		case ReturnInstructionId:
 		{
 			ReturnInstruction *i = (ReturnInstruction *)instruction;
-			WriteTabs(output);
 			WriteString(output, "return ");
 			WriteExpression(output, i->value);
-			WriteString(output, ";\n");
 			break;
 		}
 	}
@@ -1817,7 +1875,12 @@ func WriteBlock(Output *output, BlockInstruction *block)
 	Instruction *instruction = block->first;
 	while(instruction)
 	{
+		WriteTabs(output);
 		WriteInstruction(output, instruction);
+
+		if(NeedsSemicolon(instruction->id)) WriteString(output, ";");
+		WriteString(output, "\n");
+		
 		instruction = instruction->next;
 	}
 	
