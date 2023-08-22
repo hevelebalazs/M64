@@ -714,6 +714,7 @@ typedef struct tdef Expression
 {
 	ExpressionId id;
 	VarType *type;
+	bool modifiable;
 } Expression;
 
 typedef struct tdef ArrayIndexExpression
