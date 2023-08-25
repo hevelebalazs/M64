@@ -1,0 +1,55 @@
+func ForTest(n : int, A : @int)
+{
+	#define fori i:#Name : E1:#Expression to E2:#Expression I:#Instruction
+	{
+		for #i := #E1; #i <= #E2; #i++
+		{
+			#I;
+		}
+	}
+	
+	fori i : 1 to n - 1
+	{
+		A[i] = i;
+	}
+	
+	#define forv v:#Name : A:#Expression, N:#Expression I:#Instruction
+	{
+		for i := 0; i < #N; i++
+		{
+			#v := #A[i];
+			#I;
+		}
+	}
+	
+	sum := 0;
+	forv v : A, n
+	{
+		sum += v;
+	}
+	
+	#define fora a:#Name : A:#Expression, N:#Expression I:#Instruction
+	{
+		fori i : 0 to #N - 1
+		{
+			#a := @#A[i];
+			#I;
+		}
+	}
+	
+	v[0] = sum;
+	
+	fora v : A, n
+	{
+		v@ = v@ * v@;
+	}
+}
+
+#c_code
+int main()
+{
+	int A[10];
+	ForTest(10, A);
+	
+	return 0;
+}
