@@ -177,6 +177,7 @@ typedef struct tdef CodeLine
 } CodeLine;
 
 struct decl VarType;
+struct decl FuncDefinition;
 
 typedef struct tdef ParseInput
 {
@@ -187,6 +188,8 @@ typedef struct tdef ParseInput
 	VarStack var_stack;
 	bool any_error;
 	Token last_token;
+	
+	struct FuncDefinition *func_definition;
 	
 	VarType *int_type;
 	VarType *bool_type;
@@ -1157,24 +1160,6 @@ typedef struct tdef ReturnInstruction
 	Expression *value;
 } ReturnInstruction;
 
-static ReturnInstruction *
-func ReadReturnInstruction(ParseInput *input)
-{
-	ReadTokenId(input, ReturnTokenId);
-	
-	Expression *value = 0;
-	if(!PeekTokenId(input, SemiColonTokenId)) value = ReadExpression(input);
-	
-	// TODO: check that we are in a function definition
-	// TODO: check that it has same type as the return type of current function definition
-	
-	ReturnInstruction *i = ArenaPushType(&input->arena, ReturnInstruction);
-	i->i.id = ReturnInstructionId;
-	
-	i->value = value;
-	return i;
-}
-
 typedef enum tdef DefinitionId
 {
 	FuncDefinitionId,
@@ -1305,6 +1290,8 @@ func NeedsSemicolon(InstructionId id)
 	
 	return true;
 }
+
+static ReturnInstruction *decl ReadReturnInstruction(ParseInput *);
 
 static Instruction *
 func ReadInstruction(ParseInput *input)
@@ -1478,6 +1465,33 @@ typedef struct tdef FuncDefinition
 	BlockInstruction *body;
 } FuncDefinition;
 
+static ReturnInstruction *
+func ReadReturnInstruction(ParseInput *input)
+{
+	ReadTokenId(input, ReturnTokenId);
+	
+	Expression *value = 0;
+	if(!PeekTokenId(input, SemiColonTokenId)) value = ReadExpression(input);
+	
+	if(!input->func_definition)
+	{
+		SetError(input, "Found 'return' outside of function definition!");
+	}
+	else
+	{
+		if(!TypesEqual(input->func_definition->header.return_type, value->type))
+		{
+			SetError(input, "Found 'return' with invalid type");
+		}
+	}
+	
+	ReturnInstruction *i = ArenaPushType(&input->arena, ReturnInstruction);
+	i->i.id = ReturnInstructionId;
+	
+	i->value = value;
+	return i;
+}
+
 static FuncHeader
 func ReadFuncHeader(ParseInput *input)
 {
@@ -1561,18 +1575,26 @@ func ReadFuncDefinition(ParseInput *input)
 {
 	ReadTokenId(input, FuncTokenId);	
 	
+	FuncDefinition *prev_func_definition = input->func_definition;
+	
 	FuncDefinition *def = ArenaPushType(&input->arena, FuncDefinition);
 	def->def.id = FuncDefinitionId;
 	
+	
 	FuncHeader header = ReadFuncHeader(input);
+	def->header = header;
+	
+	input->func_definition = def;
 	BlockInstruction *body = ReadBlock(input);
+	
 	if(!body)
 	{
 		SetError(input, "Function doesn't have a body!");
 	}
 	
-	def->header = header;
 	def->body = body;
+	
+	input->func_definition = prev_func_definition;
 	
 	return def;
 }
