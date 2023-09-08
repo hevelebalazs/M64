@@ -742,6 +742,7 @@ func PushArrayIndexExpression(MemoryArena *arena, Expression *array, Expression 
 	
 	e->array = array;
 	e->index = index;
+	e->e.modifiable = true;
 	return e;
 }
 
@@ -760,6 +761,7 @@ func PushIntegerConstantExpression(MemoryArena *arena, Token token, VarType *int
 	e->e.type = int_type;
 	
 	e->token = token;
+	e->e.modifiable = false;
 	return e;
 }
 
@@ -780,6 +782,7 @@ func PushLessThanExpression(MemoryArena *arena, Expression *left, Expression *ri
 	
 	e->left = left;
 	e->right = right;
+	e->e.modifiable = false;
 	return e;
 }
 
@@ -798,6 +801,7 @@ func PushVarExpression(MemoryArena *arena, Var var)
 	e->e.type = var.type;
 	
 	e->var = var;
+	e->e.modifiable = true;
 	return e;
 }
 
@@ -1369,7 +1373,11 @@ func ReadInstruction(ParseInput *input)
 		}
 		else if(ReadTokenId(input, PlusPlusTokenId))
 		{
-			// TODO: check that expression is modifiable!
+			if(!expression->modifiable)
+			{
+				SetError(input, "Cannot increment a non-modifiable expression.");
+			}
+			
 			if(!TypesEqual(expression->type, input->int_type))
 			{
 				SetError(input, "Invalid type for '++'.");
