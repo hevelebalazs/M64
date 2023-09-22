@@ -1,6 +1,7 @@
 typedef struct tdef
 {
 	MemoryArena arena;
+	FuncDefinition *in_func;
 } X64Output;
 
 static void
@@ -38,7 +39,7 @@ func X64WriteTabs(X64Output *output)
 }
 
 static void
-func X64WriteInstruction(X64Output *output, char *instruction)
+func X64WriteAsmInstruction(X64Output *output, char *instruction)
 {
 	X64WriteTabs(output);
 	X64WriteString(output, instruction);
@@ -46,20 +47,95 @@ func X64WriteInstruction(X64Output *output, char *instruction)
 }
 
 static void
+func X64WriteExpression(X64Output *output, Expression *expression)
+{
+	// Puts the expression value on the top of the stack
+	switch(expression->id)
+	{
+		case IntegerConstantExpressionId:
+		{
+			IntegerConstantExpression *e = (IntegerConstantExpression *)expression;
+			
+			X64WriteTabs(output);
+			X64WriteString(output, "push ");
+			X64WriteToken(output, e->token);
+			X64WriteString(output, "\n");
+			
+			break;
+		}
+		default:
+		{
+			// TODO: get expression name from its id
+			printf("Writing expression type %i to asm not yet implemented.\n", (int)expression->id);
+			break;
+		}
+	}
+}
+
+static void
+func X64WriteInstruction(X64Output *output, Instruction *instruction)
+{
+	// TODO: write instruction with a comment above its asm code	
+		// e.g. "; return 0;"
+	switch(instruction->id)
+	{
+		case ReturnInstructionId:
+		{
+			ReturnInstruction *i = (ReturnInstruction *)instruction;
+			X64WriteExpression(output, i->value);
+			
+			X64WriteAsmInstruction(output, "pop rax");
+			
+			X64WriteTabs(output);
+			X64WriteString(output, "jmp ");
+			X64WriteToken(output, output->in_func->header.name);
+			X64WriteString(output, "_return\n");
+			break;
+		}
+		default:
+		{
+			// TODO: get instruction name from its id
+			printf("Writing instruction type %i to asm not yet implemented.\n", (int)instruction->id);
+			break;
+		}
+	}
+	X64WriteString(output, "\n");
+}
+
+static void
+func X64WriteBlock(X64Output *output, BlockInstruction *block)
+{
+	Instruction *instruction = block->first;
+	while(instruction)
+	{
+		X64WriteInstruction(output, instruction);
+		instruction = instruction->next;
+	}
+}
+
+static void
 func X64WriteFunc(X64Output *output, FuncDefinition *func_def)
 {
+	output->in_func = func_def;
 	FuncHeader header = func_def->header;
 	X64WriteToken(output, header.name);
 	X64WriteString(output, ":\n");
 	
-	X64WriteInstruction(output, "push rbp");
-	X64WriteInstruction(output, "mov rbp, rsp");
-	X64WriteInstruction(output, "sub rsp, 32");
+	X64WriteAsmInstruction(output, "push rbp");
+	X64WriteAsmInstruction(output, "mov rbp, rsp");
+	X64WriteAsmInstruction(output, "sub rsp, 32");
 	X64WriteString(output, "\n");
 	
-	X64WriteInstruction(output, "add rsp, 32");
-	X64WriteInstruction(output, "pop rbp");
-	X64WriteInstruction(output, "ret");
+	X64WriteBlock(output, func_def->body);
+	
+	X64WriteTabs(output);
+	X64WriteToken(output, header.name);
+	X64WriteString(output, "_return:\n");
+	
+	X64WriteAsmInstruction(output, "add rsp, 32");
+	X64WriteAsmInstruction(output, "pop rbp");
+	X64WriteAsmInstruction(output, "ret");
+	output->in_func = 0;
 }
 
 static void

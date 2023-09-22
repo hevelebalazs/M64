@@ -1575,6 +1575,7 @@ func ReadFuncHeader(ParseInput *input)
 static FuncDefinition *
 func ReadFuncDefinition(ParseInput *input)
 {
+	// TODO: set error if function with return type doesn't return anything!	
 	ReadTokenId(input, FuncTokenId);	
 	
 	FuncDefinition *prev_func_definition = input->func_definition;
