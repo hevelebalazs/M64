@@ -1,0 +1,49 @@
+#define Erase(A : #Array, Condition : #Expression) #as
+{
+	n := 0;
+	fora v : A
+	{
+		use v;
+		if !Condition
+		{
+			A[n] = v;
+			n++;
+		}
+	}
+	A.n = n;
+}
+
+Erase(entities, health_points == 0)
+
+#define Swap(A : #Var, B : #Var) #as
+{
+	tmp := A;
+	A := B;
+	B := tmp;
+}
+
+#define Sort(A : #Array, CorrectOrder : #Expression) #as
+{
+	for i := 0 to A.n - 1
+	{
+		for j := i + 1 to n
+		{
+			__left := A[i];
+			__right := A[j];
+			if !CorrectOrder
+			{
+				Swap(A[i], A[j]);
+			}
+		}
+	}
+}
+
+func SortAllWays(A : @[#n]int, n : int)
+{
+	Sort(A, __left < __right);
+	Sort(A, __left > __right);
+	
+	#func CmpFancy(a : int, b : int) do return I[A] < I[B];
+
+	Sort(A, CmpFancy(__left, __right));
+}

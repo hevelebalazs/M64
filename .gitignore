@@ -3,3 +3,5 @@ Samples/*.hpp
 .vs/*
 *.exe
 Example/*.c
+Example/*.asm
+Example/*.obj
