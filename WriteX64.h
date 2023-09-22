@@ -74,14 +74,18 @@ func X64WriteExpression(X64Output *output, Expression *expression)
 
 static void
 func X64WriteInstruction(X64Output *output, Instruction *instruction)
-{
-	// TODO: write instruction with a comment above its asm code	
-		// e.g. "; return 0;"
+{	
+	MemoryArena *arena = &output->arena;
 	switch(instruction->id)
 	{
 		case ReturnInstructionId:
 		{
 			ReturnInstruction *i = (ReturnInstruction *)instruction;
+			X64WriteTabs(output);
+			X64WriteString(output, "; ");
+			WriteFormattedReturnInstruction(arena, i);
+			X64WriteString(output, "\n");
+			
 			X64WriteExpression(output, i->value);
 			
 			X64WriteAsmInstruction(output, "pop rax");

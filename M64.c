@@ -1661,6 +1661,7 @@ func ReadDefinitionList(ParseInput *input)
 }
 
 // #include "WriteC.h"
+#include "WriteFormatted.h"
 #include "WriteX64.h"
 
 int main(int arg_n, char **arg_v)
