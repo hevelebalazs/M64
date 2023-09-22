@@ -1,6 +1,4 @@
 func main() int
 {
-	return 12;
-	
-	return 8;
+	return 12 + 2;
 }

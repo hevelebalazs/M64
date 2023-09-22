@@ -73,6 +73,7 @@ typedef enum tdef TokenId
 	OpenBracketsTokenId,
 	OpenParenTokenId,
 	PlusPlusTokenId,
+	PlusTokenId,
 	PoundCCodeTokenId,
 	ReturnTokenId,
 	SemiColonTokenId,
@@ -500,11 +501,20 @@ func ReadToken(ParseInput *input)
 		token.length = 1;
 		pos->at++;
 	}
-	else if(pos->at[0] == '+' && pos->at[1] == '+')
+	else if(pos->at[0] == '+')
 	{
-		token.id = PlusPlusTokenId;
-		pos->at += 2;
-		token.length = 2;
+		if(pos->at[1] == '+')
+		{
+			token.id = PlusPlusTokenId;
+			pos->at += 2;
+			token.length = 2;
+		}
+		else
+		{
+			token.id = PlusTokenId;
+			pos->at++;
+			token.length = 1;
+		}
 	}
 	else if(pos->at[0] == '#')
 	{
@@ -699,8 +709,30 @@ func PushVar(VarStack *stack, Var var)
 	stack->size++;
 }
 
+static bool
+func TypesEqual(VarType *type1, VarType *type2)
+{
+	if(!type1 || !type2) return (type1 == type2);
+	
+	if(type1->id != type2->id) return false;
+	
+	switch(type1->id)
+	{
+		case BaseTypeId:
+		{
+			BaseType *base1 = (BaseType *)type1;
+			BaseType *base2 = (BaseType *)type2;
+			return base1->base_id == base2->base_id;
+		}
+	}
+	
+	return true;
+}
+
+
 typedef enum tdef ExpressionId
 {
+	AddExpressionId,
 	ArrayIndexExpressionId,
 	IntegerConstantExpressionId,
 	LessThanExpressionId,
@@ -713,6 +745,27 @@ typedef struct tdef Expression
 	VarType *type;
 	bool modifiable;
 } Expression;
+
+typedef struct tdef AddExpression
+{
+	Expression e;
+	
+	Expression *left;
+	Expression *right;
+} AddExpression;
+
+static AddExpression *
+func PushAddExpression(MemoryArena *arena, Expression *left, Expression *right)
+{
+	AddExpression *e = ArenaPushType(arena, AddExpression);
+	e->e.id = AddExpressionId;
+	e->e.type = left->type;
+	
+	e->left = left;
+	e->right = right;
+	e->e.modifiable = false;
+	return e;
+}
 
 typedef struct tdef ArrayIndexExpression
 {
@@ -886,27 +939,29 @@ static Expression *
 func ReadSumLevelExpression(ParseInput *input)
 {
 	Expression *e = ReadProductLevelExpression(input);
-	return e;
-}
-
-static bool
-func TypesEqual(VarType *type1, VarType *type2)
-{
-	if(!type1 || !type2) return (type1 == type2);
-	
-	if(type1->id != type2->id) return false;
-	
-	switch(type1->id)
+	while(1)
 	{
-		case BaseTypeId:
+		if(ReadTokenId(input, PlusTokenId))
 		{
-			BaseType *base1 = (BaseType *)type1;
-			BaseType *base2 = (BaseType *)type2;
-			return base1->base_id == base2->base_id;
+			Expression *left = e;
+			Expression *right = ReadProductLevelExpression(input);
+			if(!right)
+			{
+				SetError(input, "Expected expression after '+'.");
+			}
+			if(!TypesEqual(left->type, right->type))
+			{
+				SetError(input, "Types do not match for '+'.");
+			}
+			
+			e = (Expression *)PushAddExpression(&input->arena, left, right);
+		}
+		else
+		{
+			break;
 		}
 	}
-	
-	return true;
+	return e;
 }
 
 static Expression *
@@ -1575,7 +1630,6 @@ func ReadFuncHeader(ParseInput *input)
 static FuncDefinition *
 func ReadFuncDefinition(ParseInput *input)
 {
-	// TODO: set error if function with return type doesn't return anything!	
 	ReadTokenId(input, FuncTokenId);	
 	
 	FuncDefinition *prev_func_definition = input->func_definition;

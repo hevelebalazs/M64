@@ -52,6 +52,20 @@ func X64WriteExpression(X64Output *output, Expression *expression)
 	// Puts the expression value on the top of the stack
 	switch(expression->id)
 	{
+		case AddExpressionId:
+		{
+			AddExpression *e = (AddExpression *)expression;
+			
+			X64WriteExpression(output, e->left);
+			X64WriteExpression(output, e->right);
+			
+			X64WriteAsmInstruction(output, "pop rax");
+			X64WriteAsmInstruction(output, "pop rbx");
+			X64WriteAsmInstruction(output, "add rax, rbx");
+			X64WriteAsmInstruction(output, "push rax");
+			
+			break;
+		}
 		case IntegerConstantExpressionId:
 		{
 			IntegerConstantExpression *e = (IntegerConstantExpression *)expression;

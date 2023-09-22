@@ -23,6 +23,14 @@ func WriteFormattedExpression(MemoryArena *arena, Expression *expression)
 {
 	switch(expression->id)
 	{
+		case AddExpressionId:
+		{
+			AddExpression *e = (AddExpression *)expression;
+			WriteFormattedExpression(arena, e->left);
+			WriteFormattedString(arena, " + ");
+			WriteFormattedExpression(arena, e->right);
+			break;
+		}
 		case IntegerConstantExpressionId:
 		{
 			IntegerConstantExpression *e = (IntegerConstantExpression *)expression;
