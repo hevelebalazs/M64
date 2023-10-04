@@ -891,7 +891,7 @@ func ReadNumberLevelExpression(ParseInput *input)
 			if(!e || !e->type || e->type->id != PointerTypeId)
 			{
 				SetError(input, "Cannot index non-array expression.");
-				continue;
+				return 0;
 			}
 			
 			Expression *index = ReadExpression(input);
@@ -899,18 +899,19 @@ func ReadNumberLevelExpression(ParseInput *input)
 			if(!index)
 			{
 				SetError(input, "Expected array index expression.");
-				continue;
+				return 0;
 			}
 			
 			if(!index->type || !IsIntegerType(index->type))
 			{
 				SetError(input, "Array index is not integer.");
-				continue;
+				return 0;
 			}
 			
 			if(!ReadTokenId(input, CloseBracketsTokenId))
 			{
 				SetError(input, "Missing ']'.");
+				return 0;
 			}
 			
 			e = (Expression *)PushArrayIndexExpression(&input->arena, e, index);
@@ -951,10 +952,12 @@ func ReadSumLevelExpression(ParseInput *input)
 			if(!right)
 			{
 				SetError(input, "Expected expression after '+'.");
+				return 0;
 			}
 			if(!TypesEqual(left->type, right->type))
 			{
 				SetError(input, "Types do not match for '+'.");
+				return 0;
 			}
 			
 			e = (Expression *)PushAddExpression(&input->arena, left, right);
@@ -979,10 +982,12 @@ func ReadCompareLevelExpression(ParseInput *input)
 			if(!right)
 			{
 				SetError(input, "Expected expression after '<'.");
+				return 0;
 			}
 			if(!TypesEqual(e->type, right->type))
 			{
 				SetError(input, "Types do not match for '<'.");
+				return 0;
 			}
 			
 			e = (Expression *)PushLessThanExpression(&input->arena, e, right, input->bool_type);
@@ -1083,6 +1088,7 @@ func ReadIfInstruction(ParseInput *input)
 	if(!condition || !condition->type || !IsBoolType(condition->type))
 	{
 		SetError(input, "Expected bool expression after 'if'.");
+		return 0;
 	}
 	
 	BlockInstruction *body = ReadBlock(input);
@@ -1164,26 +1170,31 @@ func ReadForInstruction(ParseInput *input)
 	if(!IsValidInitInstruction(init))
 	{
 		SetError(input, "Invalid init instruction after 'for'.");
+		return 0;
 	}
 	
 	if(!ReadTokenId(input, SemiColonTokenId))
 	{
 		SetError(input, "Expected ';' after init instruction for 'for' loop.");
+		return 0;
 	}
 	
 	Expression *condition = ReadExpression(input);
 	if(!condition)
 	{
 		SetError(input, "Expected condition for 'for' loop.");
+		return 0;
 	}
 	else if(condition->type != input->bool_type)
 	{
 		SetError(input, "Condition for 'for' loop not boolean.");
+		return 0;
 	}
 	
 	if(!ReadTokenId(input, SemiColonTokenId))
 	{
 		SetError(input, "Expected ';' after condition for 'for' loop.");
+		return 0;
 	}
 	
 	Instruction *update = 0;
@@ -1195,6 +1206,7 @@ func ReadForInstruction(ParseInput *input)
 	if(!IsValidUpdateInstruction(update))
 	{
 		SetError(input, "Invalid update instruction for 'for' loop.");
+		return 0;
 	}
 	
 	ForInstruction *i = ArenaPushType(&input->arena, ForInstruction);
@@ -1253,6 +1265,7 @@ func ReadCCodeDefinition(ParseInput *input)
 	if(!ReadTokenId(input, OpenBracesTokenId))
 	{
 		SetError(input, "Expected '{' after '#c_code'!");
+		return 0;
 	}
 	
 	Token c_code_token = ReadTokenUntilClosingBraces(input);
@@ -1262,6 +1275,7 @@ func ReadCCodeDefinition(ParseInput *input)
 	if(!ReadTokenId(input, CloseBracesTokenId))
 	{
 		SetError(input, "No matching '}' after '#c_code'!");
+		return 0;
 	}
 	
 	return def;
@@ -1287,6 +1301,7 @@ func ReadVarType(ParseInput *input)
 		if(!pointed_type)
 		{
 			SetError(input, "Expected variable type after '@'.");
+			return 0;
 		}
 		
 		type = (VarType *)PushPointerType(&input->arena, pointed_type);
@@ -1378,11 +1393,13 @@ func ReadInstruction(ParseInput *input)
 		if(!init)
 		{
 			SetError(input, "Expected expression after ':='.");
+			return 0;
 		}
 		
 		if(!init->type)
 		{
 			SetError(input, "Expression for variable initialization doesn't have type.");
+			return 0;
 		}
 		
 		CreateVariableInstruction *cv = ArenaPushType(&input->arena, CreateVariableInstruction);
@@ -1409,11 +1426,13 @@ func ReadInstruction(ParseInput *input)
 			if(!right)
 			{
 				SetError(input, "Expected expression after '='.");
+				return 0;
 			}
 			
 			if(!TypesEqual(expression->type, right->type))
 			{
 				SetError(input, "Unmatching types for '='.");
+				return 0;
 			}
 			
 			AssignInstruction *i = ArenaPushType(&input->arena, AssignInstruction);
@@ -1428,11 +1447,13 @@ func ReadInstruction(ParseInput *input)
 			if(!expression->modifiable)
 			{
 				SetError(input, "Cannot increment a non-modifiable expression.");
+				return 0;
 			}
 			
 			if(!TypesEqual(expression->type, input->int_type))
 			{
 				SetError(input, "Invalid type for '++'.");
+				return 0;
 			}
 			
 			IncrementInstruction *i = ArenaPushType(&input->arena, IncrementInstruction);
@@ -1444,6 +1465,7 @@ func ReadInstruction(ParseInput *input)
 		else
 		{
 			SetError(input, "Unexpected expression.");
+			return 0;
 		}
 	}
 	return instruction;
@@ -1456,6 +1478,7 @@ func ReadBlock(ParseInput *input)
 	if(!ReadTokenId(input, OpenBracesTokenId))
 	{
 		SetError(input, "Expected '{'");
+		return 0;
 	}
 	
 	StackState stack_state = GetStackState(input);
@@ -1475,6 +1498,7 @@ func ReadBlock(ParseInput *input)
 			if(!ReadTokenId(input, SemiColonTokenId))
 			{
 				SetError(input, "Expected ';' after instruction.");
+				return 0;
 			}
 		}
 		
@@ -1536,12 +1560,14 @@ func ReadReturnInstruction(ParseInput *input)
 	if(!input->func_definition)
 	{
 		SetError(input, "Found 'return' outside of function definition!");
+		return 0;
 	}
 	else
 	{
 		if(!TypesEqual(input->func_definition->header.return_type, value->type))
 		{
 			SetError(input, "Found 'return' with invalid type");
+			return 0;
 		}
 	}
 	
@@ -1641,8 +1667,9 @@ func ReadFuncDefinition(ParseInput *input)
 	FuncDefinition *def = ArenaPushType(&input->arena, FuncDefinition);
 	def->def.id = FuncDefinitionId;
 	
-	
 	FuncHeader header = ReadFuncHeader(input);
+	if(input->any_error)
+		return 0;
 	def->header = header;
 	
 	input->func_definition = def;
@@ -1651,6 +1678,7 @@ func ReadFuncDefinition(ParseInput *input)
 	if(!body)
 	{
 		SetError(input, "Function doesn't have a body!");
+		return 0;
 	}
 	
 	def->body = body;
