@@ -63,6 +63,7 @@ typedef enum tdef TokenId
 	ColonTokenId,
 	EndOfFileTokenId,
 	EqualsTokenId,
+	ExternTokenId,
 	ForTokenId,
 	FuncTokenId,
 	IfTokenId,
@@ -559,7 +560,11 @@ func ReadToken(ParseInput *input)
 			pos->at++;
 		}
 		
-		if(TokenEquals(token, "for"))
+		if(TokenEquals(token, "extern"))
+		{
+			token.id = ExternTokenId;
+		}
+		else if(TokenEquals(token, "for"))
 		{
 			token.id = ForTokenId;
 		}
@@ -1230,8 +1235,9 @@ typedef struct tdef ReturnInstruction
 
 typedef enum tdef DefinitionId
 {
-	FuncDefinitionId,
-	CCodeDefinitionId
+	CCodeDefinitionId,
+	ExternFuncDefinitionId,
+	FuncDefinitionId
 } DefinitionId;
 
 typedef struct tdef Definition
@@ -1688,6 +1694,45 @@ func ReadFuncDefinition(ParseInput *input)
 	return def;
 }
 
+typedef struct tdef ExternFuncDefinition
+{
+	Definition def;
+	
+	Token name;
+} ExternFuncDefinition;
+
+static ExternFuncDefinition *
+func ReadExternFuncDefinition(ParseInput *input)
+{
+	ReadTokenId(input, ExternTokenId);
+	
+	if(!ReadTokenId(input, FuncTokenId))
+	{
+		SetError(input, "Expected 'func' after 'extern'.");
+		return 0;
+	}
+	
+	Token name = ReadToken(input);
+	if(name.id != NameTokenId)
+	{
+		SetError(input, "Expected name for extern function.");
+		return 0;
+	}
+	
+	if(!ReadTokenId(input, SemiColonTokenId))
+	{
+		SetError(input, "Expected ';' after extern function definition.");
+		return 0;
+	}
+	
+	ExternFuncDefinition *def = ArenaPushType(&input->arena, ExternFuncDefinition);
+	def->def.id = ExternFuncDefinitionId;
+	
+	def->name = name;
+	
+	return def;
+}
+
 static Definition *
 func ReadDefinition(ParseInput *input)
 {
@@ -1700,6 +1745,10 @@ func ReadDefinition(ParseInput *input)
 	else if(token.id == FuncTokenId)
 	{
 		def = (Definition *)ReadFuncDefinition(input);
+	}
+	else if(token.id == ExternTokenId)
+	{
+		def = (Definition *)ReadExternFuncDefinition(input);
 	}
 	else
 	{
