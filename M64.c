@@ -1581,6 +1581,7 @@ func ReadFuncHeader(ParseInput *input)
 		if(name_list.size == 0)
 		{
 			SetError(input, "Expected ',' or ')' after function parameter.");
+			break;
 		}
 		if(!ReadTokenId(input, ColonTokenId))
 		{
