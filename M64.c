@@ -250,6 +250,9 @@ func PrintTokenInLine(ParseInput *input, Token token)
 static void
 func SetErrorToken(ParseInput *input, char *description, Token token)
 {
+	if(input->any_error)
+		return;
+	
 	printf("Error: %s\n", description);
 	printf("In line %i\n", token.row);
 	PrintTokenInLine(input, token);
@@ -1721,8 +1724,6 @@ func ReadDefinitionList(ParseInput *input)
 
 int main(int arg_n, char **arg_v)
 {
-	// TODO: add a switch to compile to c/x64
-	
 	setvbuf(stdout, NULL, _IONBF, 0);
 	
 	if(arg_n != 3)
