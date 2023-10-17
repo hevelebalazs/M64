@@ -1,110 +1,105 @@
-#define HeapType T : #Name ":" X : #Type #as
-{
-	struct T
-	{
-		n : int;
-		use values : @[#n]X;
-	}
-}
+#func Swap(T: #Type, v1 : T, v2 : T)
+	tmp := v1;
+	v1 = v2;
+	v2 = tmp;
+end
 
-#define HeapInit(Heap : #Var, n : int, values : #Array) #as
-{
+#type Heap : struct
+	#T : #Type;
+	#Cmp : #func(T, T) bool;
+	n : int;
+	use values : @[#n]#T;
+end
+
+#func HeapInit(heap : @Heap, n : int, values : @heap.T)
 	heap.n = n;
 	heap.values = values;
-}
+end
 
-#define HeapAdd(Heap : #Var, value : #Expression, Cmp : #Expression)
-{
-	use Heap;
+#func HeapAdd(heap : @Heap, value : heap.T)
+	use heap;
 	values[n] = value;
 	n++;
 	
 	at := n - 1;
-	while 1
-	{
-		if at == 0 do break;
+	while 1:
+		break if at == 0;
 		
 		parent := (at - 1) / 2;
-		if Cmp(__left : values[at], __right : values[parent])
-		{
-			Swap(values[at], values[parent]);
-		}
-	}
-}
+		if heap.Cmp(values[at], values[parent]):
+			Swap(T, values[at], values[parent]);
+		end
+	end
+end
 
-#define HeapPop(Heap : #Var) #as
-{
+#func HeapPop(heap : @Heap) : heap.T
 	use heap;
 	result := values[0];
 	n--;
 	values[0] = values[n];
 	
 	at := 0;
-	while 1
-	{
+	while 1:
 		at1 := at;
 		#left := 2 * at + 1;
 		#right := 2 * at + 2;
 		
-		if left < n && cmp(values[left], values[at1]): at1 = left;
-		if right < n && cmp(values[right], values[at1]): at1 = right;
+		if left < n and Cmp(values[left], values[at1]):
+			at1 = left;
+		end
+		if right < n and Cmp(values[right], values[at1]):
+			at1 = right;
+		end
 		
-		if at == at1: break;
+		break if at == at1;
 		
-		X tmp = values[at];
-		values[at] = values[at1];
-		values[at1] = tmp;
+		Swap(T, values[at], values[at1]);
 		
 		at = at1;
-	}
-		
+	end
+	
 	return result;
-}
+end
 
-HeapType HeapInt : int;
-HeapType HeapFloat : float;
-
-HeapGen(HeapIntAsc, int)(#func(a1 : int, a2 : int){return a1 < a2;})
-HeapGen(HeapIntDesc, int)(#func(a1 : int, a2 : int){return a1 > a2;})
-
-func test()
-{
-	heap := HeapIntAscInit;
-	HeapInit(heap, a);
+#func HeapIntAscInit(n : int) Heap
+	heap : Heap;
+	heap.T = int;
 	
-	v := HeapPop(heap);
-}
-
-#c_code
-{
-	#include <stdio.h>
+	#func IntAsc(a : int, b : int) bool
+		return a < b;
+	end
 	
-	int main()
-	{
-		int A[10];
-		for(int i = 0; i < 10; i++)
-		{
-			scanf("%i", &A[i]);
-		}
-		
-		HeapIntAsc heap = HeapIntAscInit(10);
-		for(int i = 0; i < 10; i++) HeapIntAscAdd(&heap, A[i]);
-		
-		for(int i = 0; i < 10; i++)
-		{
-			int x = HeapIntAscPop(&heap);
-			printf("%x\n", x);
-		}
-		
-		HeapIntDesc heap = HeapIntDescInit(10);
-		for(int i = 0; i < 10; i++) HeapIntDescAdd(&heap, A[i]);
-		
-		for(int i = 0; i < 10; i++)
-		{
-			int x = HeapIntDescPop(&heap);
-			printf("%x\n", x);
-		}
-		
-		return 0;
-	}
-}
+	heap.Cmp = IntAsc;
+	heap.n = n;
+	
+	return heap;
+end
+
+func main() int
+	A : int[10];
+	for i := 0; i < 10; i++:
+		scanf("%i", &A[i]);
+	end
+	
+	heap := HeapIntAscInit(10);
+	for i := 0; i < 10; i++:
+		HeapAdd(&heap, A[i]);
+	end
+	
+	for i := 0 to < 10:
+		x := HeapPop(&heap);
+		printf("%i\n", x);
+	end
+	
+	heap2 := HeapIntDescInit(10);
+	for i := 0; i < 10; i++:
+		HeapAdd(heap2, A[i]);
+	end
+	
+	for i := 0; i < 10; i++:
+		x := HeapPop(&heap);
+		printf("%i\n", x);
+	end
+	
+	return 0;
+end

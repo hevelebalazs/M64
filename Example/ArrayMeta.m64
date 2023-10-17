@@ -1,49 +1,45 @@
-#define Erase(A : #Array, Condition : #Expression) #as
-{
+Array : type struct
+	#T : #Type;
+	n : int;
+	use v : @[#N]#T;
+end
+
+func Erase(A : @Array, Condition : #Func(A.T) bool)
 	n := 0;
-	fora v : A
-	{
-		use v;
-		if !Condition
-		{
+	for i := 0; i < A.n; i++
+		if !Condition(A[i])
 			A[n] = v;
 			n++;
-		}
-	}
-	A.n = n;
-}
+		end
+	end
+	a.n = n;
+end
 
-Erase(entities, health_points == 0)
-
-#define Swap(A : #Var, B : #Var) #as
-{
+#func Swap(T : #Type, A : T, B : T)
 	tmp := A;
 	A := B;
 	B := tmp;
-}
+end
 
-#define Sort(A : #Array, CorrectOrder : #Expression) #as
-{
-	for i := 0 to A.n - 1
-	{
-		for j := i + 1 to n
-		{
-			__left := A[i];
-			__right := A[j];
-			if !CorrectOrder
-			{
-				Swap(A[i], A[j]);
-			}
-		}
-	}
-}
+func Sort(A : @Array, CorrectOrder : #Func(A.T, A.T) bool)
+	for i := 0; i < A.n - 1; i++:
+		for j := i + 1; j < A.n; j++:
+			if !CorrectOrder(A[i], A[j]):
+				Swap(A.T, A[i], A[j]);
+			end
+		end
+	end
+end
 
-func SortAllWays(A : @[#n]int, n : int)
-{
-	Sort(A, __left < __right);
-	Sort(A, __left > __right);
+func SortAllWays(A : @int, n : int, I : @int)
+	AA : Array;
+	AA.T = int;
+	AA.n = n;
+	AA.v = A;
 	
-	#func CmpFancy(a : int, b : int) do return I[A] < I[B];
-
-	Sort(A, CmpFancy(__left, __right));
-}
+	#func CmpFancy(a : int, b : int):
+		return I[a] < I[b];
+	end
+	
+	Sort(A, CmpFancy);
+end
