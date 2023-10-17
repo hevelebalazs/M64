@@ -1,11 +1,11 @@
-#func Swap(T: #Type, v1 : T, v2 : T)
-	tmp := v1;
-	v1 = v2;
-	v2 = tmp;
+#func Swap(T: #type, v1 : @T, v2 : @T)
+	tmp := @v1;
+	@v1 = @v2;
+	@v2 = tmp;
 end
 
-#type Heap : struct
-	#T : #Type;
+type Heap : struct
+	#T : #type;
 	#Cmp : #func(T, T) bool;
 	n : int;
 	use values : @[#n]#T;
@@ -26,8 +26,8 @@ end
 		break if at == 0;
 		
 		parent := (at - 1) / 2;
-		if heap.Cmp(values[at], values[parent]):
-			Swap(T, values[at], values[parent]);
+		if Cmp(values[at], values[parent]):
+			Swap(T, &values[at], &values[parent]);
 		end
 	end
 end
@@ -41,8 +41,8 @@ end
 	at := 0;
 	while 1:
 		at1 := at;
-		#left := 2 * at + 1;
-		#right := 2 * at + 2;
+		left := 2 * at + 1;
+		right := 2 * at + 2;
 		
 		if left < n and Cmp(values[left], values[at1]):
 			at1 = left;
@@ -53,7 +53,7 @@ end
 		
 		break if at == at1;
 		
-		Swap(T, values[at], values[at1]);
+		Swap(T, &values[at], &values[at1]);
 		
 		at = at1;
 	end
