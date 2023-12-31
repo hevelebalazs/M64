@@ -1716,7 +1716,8 @@ typedef struct tdef StructVar
 typedef struct tdef StructDefinition
 {
 	Definition def;
-	
+
+	Token name;
 	StructVar *first_var;
 } StructDefinition;
 
@@ -1774,7 +1775,7 @@ func ReadStructDefinition(ParseInput *input)
 			if(last_var)
 			{
 				last_var->next = var;
-				var = last_var;
+				last_var = var;
 			}
 			else
 			{
@@ -1790,6 +1791,7 @@ func ReadStructDefinition(ParseInput *input)
 		}
 	}
 	
+	def->name = name;
 	def->first_var = first_var;
 	return def;
 }
@@ -1899,7 +1901,7 @@ func ReadDefinitionList(ParseInput *input)
 	return first_elem;
 }
 
-// #include "WriteC.h"
+#include "WriteC.h"
 #include "WriteFormatted.h"
 #include "WriteX64.h"
 
@@ -1961,7 +1963,7 @@ int main(int arg_n, char **arg_v)
 	DefinitionList *def_list = ReadDefinitionList(&input);
 	
 	if(input.any_error) return -1;
-
+#if 0
 	X64Output output = {};
 	output.arena = CreateArena((size_t)64 * 1024);
 	X64WriteDefinitionList(&output, def_list);
@@ -1970,8 +1972,7 @@ int main(int arg_n, char **arg_v)
 	{
 		fprintf(out, "%c", output.arena.memory[i]);
 	}
-	
-	/*
+#endif
 	Output output = {};
 	output.arena = CreateArena((size_t)64 * 1024);
 	output.tabs = 0;
@@ -1981,7 +1982,6 @@ int main(int arg_n, char **arg_v)
 	{
 		fprintf(out, "%c", output.arena.memory[i]);
 	}
-	*/
 	
 	return 0;
 }

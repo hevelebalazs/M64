@@ -1,3 +1,6 @@
-global main
-
-section .text
+typedef struct Bitmap
+{
+    unsigned int * memory;
+    int width;
+    int height;
+} Bitmap;

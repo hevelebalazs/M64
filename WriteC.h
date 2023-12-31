@@ -58,6 +58,15 @@ func WriteType(Output *output, VarType *type)
 					WriteString(output, "int");
 					break;
 				}
+				case UInt32BaseTypeId:
+				{
+					WriteString(output, "unsigned int");
+					break;
+				}
+				default:
+				{
+					printf("Unknown base type %i\n", (int)t->base_id);
+				}
 			}
 			break;
 		}
@@ -261,6 +270,32 @@ func WriteBlock(Output *output, BlockInstruction *block)
 }
 
 static void
+func WriteStructDefinition(Output *output, StructDefinition *def)
+{
+	WriteString(output, "typedef struct ");
+	WriteToken(output, def->name);
+	
+	WriteString(output, "\n{\n");
+	
+	output->tabs++;
+	
+	for(StructVar *var = def->first_var; var; var = var->next)
+	{
+		WriteTabs(output);
+		WriteType(output, var->type);
+		WriteString(output, " ");
+		WriteToken(output, var->name);
+		WriteString(output, ";\n");
+	}
+	
+	output->tabs--;
+	
+	WriteString(output, "} ");
+	WriteToken(output, def->name);
+	WriteString(output, ";\n");
+}
+
+static void
 func WriteDefinitionList(Output *output, DefinitionList *def_list)
 {
 	DefinitionListElem *elem = def_list;
@@ -291,6 +326,16 @@ func WriteDefinitionList(Output *output, DefinitionList *def_list)
 				WriteBlock(output, def->body);
 				
 				break;
+			}
+			case StructDefinitionId:
+			{
+				StructDefinition *def = (StructDefinition *)definition;
+				WriteStructDefinition(output, def);
+				break;
+			}
+			default:
+			{
+				printf("Unknown definition type %i!\n", (int)definition->id);
 			}
 		}
 		

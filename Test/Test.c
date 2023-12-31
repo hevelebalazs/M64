@@ -3,12 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-typedef struct Bitmap
-{
-	unsigned int *memory;
-	int width;
-	int height;
-} Bitmap;
+#include "Code.h"
 
 static Bitmap global_bitmap;
 
