@@ -78,6 +78,7 @@ typedef enum tdef TokenId
 	PoundCCodeTokenId,
 	ReturnTokenId,
 	SemiColonTokenId,
+	StructTokenId,
 	ToTokenId
 } TokenId;
 
@@ -111,7 +112,8 @@ typedef struct tdef Var
 typedef enum tdef BaseVarTypeId
 {
 	BoolBaseTypeId,
-	Int32BaseTypeId
+	Int32BaseTypeId,
+	UInt32BaseTypeId
 } BaseVarTypeId;
 
 typedef struct tdef BaseType
@@ -194,6 +196,7 @@ typedef struct tdef ParseInput
 	struct FuncDefinition *func_definition;
 	
 	VarType *int_type;
+	VarType *uint_type;
 	VarType *bool_type;
 } ParseInput;
 
@@ -579,6 +582,10 @@ func ReadToken(ParseInput *input)
 		else if(TokenEquals(token, "return"))
 		{
 			token.id = ReturnTokenId;
+		}
+		else if(TokenEquals(token, "struct"))
+		{
+			token.id = StructTokenId;
 		}
 		else if(TokenEquals(token, "to"))
 		{
@@ -1237,7 +1244,8 @@ typedef enum tdef DefinitionId
 {
 	CCodeDefinitionId,
 	ExternFuncDefinitionId,
-	FuncDefinitionId
+	FuncDefinitionId,
+	StructDefinitionId
 } DefinitionId;
 
 typedef struct tdef Definition
@@ -1317,6 +1325,10 @@ func ReadVarType(ParseInput *input)
 		if(TokenEquals(input->last_token, "int"))
 		{
 			type = input->int_type;
+		}
+		else if(TokenEquals(input->last_token, "uint"))
+		{
+			type = input->uint_type;
 		}
 	}
 	
@@ -1456,7 +1468,7 @@ func ReadInstruction(ParseInput *input)
 				return 0;
 			}
 			
-			if(!TypesEqual(expression->type, input->int_type))
+			if(!TypesEqual(expression->type, input->int_type) && !TypesEqual(expression->type, input->uint_type))
 			{
 				SetError(input, "Invalid type for '++'.");
 				return 0;
@@ -1694,6 +1706,94 @@ func ReadFuncDefinition(ParseInput *input)
 	return def;
 }
 
+typedef struct tdef StructVar
+{
+	Token name;
+	VarType *type;
+	struct StructVar *next;
+} StructVar;
+
+typedef struct tdef StructDefinition
+{
+	Definition def;
+	
+	StructVar *first_var;
+} StructDefinition;
+
+static StructDefinition *
+func ReadStructDefinition(ParseInput *input)
+{
+	ReadTokenId(input, StructTokenId);
+	StructDefinition *def = ArenaPushType(&input->arena, StructDefinition);
+	def->def.id = StructDefinitionId;
+	
+	Token name = ReadToken(input);
+	if(name.id != NameTokenId)
+	{
+		SetErrorToken(input, "Invalid struct name!", name);
+		return 0;
+	}
+	
+	if(!ReadTokenId(input, OpenBracesTokenId))
+	{
+		SetError(input, "Expected '{'");
+		return 0;
+	}
+	
+	StructVar *first_var = 0;
+	StructVar *last_var = 0;
+	while(1)
+	{
+		if(ReadTokenId(input, CloseBracesTokenId))
+			break;
+	
+		NameList name_list = ReadNameList(input);
+		if(name_list.size == 0)
+		{
+			SetError(input, "Expected struct variable name.");
+			break;
+		}
+		
+		if(!ReadTokenId(input, ColonTokenId))
+		{
+			SetError(input, "Expected ':' after struct variable name.");
+			return 0;
+		}
+		
+		VarType *type = ReadVarType(input);
+		if(type == 0)
+			return 0;
+		
+		for(size_t i = 0; i < name_list.size; i++)
+		{
+			Token name = name_list.names[i];
+			StructVar *var = ArenaPushType(&input->arena, StructVar);
+			var->name = name;
+			var->type = type;
+			var->next = 0;
+			if(last_var)
+			{
+				last_var->next = var;
+				var = last_var;
+			}
+			else
+			{
+				first_var = var;
+				last_var = var;
+			}
+		}
+		
+		if(!ReadTokenId(input, SemiColonTokenId))
+		{
+			SetError(input, "Expected ';' after struct variable definition.");
+			return 0;
+		}
+	}
+	
+	def->first_var = first_var;
+	return def;
+}
+
 typedef struct tdef ExternFuncDefinition
 {
 	Definition def;
@@ -1749,6 +1849,10 @@ func ReadDefinition(ParseInput *input)
 	else if(token.id == ExternTokenId)
 	{
 		def = (Definition *)ReadExternFuncDefinition(input);
+	}
+	else if(token.id == StructTokenId)
+	{
+		def = (Definition *)ReadStructDefinition(input);
 	}
 	else
 	{
@@ -1841,6 +1945,11 @@ int main(int arg_n, char **arg_v)
 	int_base->type.id = BaseTypeId;
 	int_base->base_id = Int32BaseTypeId;
 	input.int_type = (VarType *)int_base;
+	
+	BaseType *uint_base = ArenaPushType(&input.arena, BaseType);
+	uint_base->type.id = BaseTypeId;
+	uint_base->base_id = UInt32BaseTypeId;
+	input.uint_type = (VarType *)uint_base;
 	
 	BaseType *bool_base = ArenaPushType(&input.arena, BaseType);
 	bool_base->type.id = BaseTypeId;
