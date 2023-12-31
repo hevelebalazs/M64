@@ -1,18 +1,57 @@
 #define UNICODE
 #include <windows.h>
 #include <stdio.h>
+#include <stdlib.h>
+
+typedef struct Bitmap
+{
+	unsigned int *memory;
+	int width;
+	int height;
+} Bitmap;
+
+static Bitmap global_bitmap;
+
+static void ResizeBitmap(Bitmap *bitmap, int width, int height)
+{
+	free(bitmap->memory);
+	
+	bitmap->width = width;
+	bitmap->height = height;
+	
+	bitmap->memory = malloc(width * height * sizeof(unsigned int));
+}
+
+static void DrawScene(Bitmap *bitmap)
+{
+	unsigned int color = 0xAA5500;
+	unsigned int *pixel = bitmap->memory;
+	for(int row = 0; row < bitmap->height; row++)
+	{
+		for(int col = 0; col < bitmap->width; col++)
+		{
+			*pixel = color;
+			pixel++;
+		}
+	}
+}
 
 LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
 {
 	switch(message)
 	{
-		case WM_KEYDOWN:
+		case WM_SIZE:
 		{
-			if(wparam == VK_ESCAPE)
-				DestroyWindow(window);
+			RECT rect = {};
+			GetClientRect(window, &rect);
+			int width = rect.right - rect.left;
+			int height = rect.bottom - rect.top;
+			
+			ResizeBitmap(&global_bitmap, width, height);
 			break;
 		}
 		case WM_DESTROY:
+		case WM_CLOSE:
 		{
 			PostQuitMessage(0);
 			break;
@@ -61,7 +100,9 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR p, int pn)
 	{
 		fprintf(stderr, "ERROR Creating Window\n");
 		return GetLastError();
-	}		
+	}
+	
+	Bitmap *bitmap = &global_bitmap;
 	
 	int running = 1;
 	while(running)
@@ -75,7 +116,32 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR p, int pn)
 			DispatchMessageW(&message);
 		}
 		
-		Sleep(1);
+		HDC context = GetDC(window);
+		BITMAPINFO bitmap_info = {};
+		BITMAPINFOHEADER *header = &bitmap_info.bmiHeader;
+		header->biSize = sizeof(*header);
+		header->biWidth = bitmap->width;
+		header->biHeight = -bitmap->height;
+		header->biPlanes = 1;
+		header->biBitCount = 32;
+		header->biCompression = BI_RGB;
+		
+		RECT rect = {};
+		GetClientRect(window, &rect);
+		
+		int width = rect.right - rect.left;
+		int height = rect.bottom - rect.top;
+		
+		DrawScene(bitmap);
+		
+		StretchDIBits(context,
+					  0, 0, bitmap->width, bitmap->height,
+					  0, 0, width, height,
+					  bitmap->memory,
+					  &bitmap_info,
+					  DIB_RGB_COLORS,
+					  SRCCOPY);
+		ReleaseDC(window, context);
 	}
 
 	return 0;
