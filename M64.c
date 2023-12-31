@@ -217,7 +217,8 @@ func ReadFileToMemory(FILE *file)
 
 		char c;
 		int res = fscanf(file, "%c", &c);
-		if(res != 1) break;
+		if(res != 1)
+			break;
 
 		buffer[size] = c;
 		size++;
@@ -241,13 +242,14 @@ func PrintTokenInLine(ParseInput *input, Token token)
 	PrintLine(input->lines[token.row]);
 	for(size_t i = 0; i < token.col - 1; i++)
 	{
-		if(line.string[i] == '\t') printf("\t");
-		else printf(" ");
+		if(line.string[i] == '\t')
+			printf("\t");
+		else
+			printf(" ");
 	}
 	for(int i = 0; i < token.length; i++)
-	{
 		printf("^");
-	}
+
 	printf("\n");
 }
 
@@ -271,20 +273,24 @@ func SetError(ParseInput *input, char *description)
 	SetErrorToken(input, description, input->last_token);
 }
 
-
 static bool
 func TokensEqual(Token token1, Token token2)
 {
-	if(token1.id != token2.id) return false;
-	if(token1.length != token2.length) return false;
+	if(token1.id != token2.id)
+		return false;
+	if(token1.length != token2.length)
+		return false;
 	
 	for(size_t i = 0; i < token1.length; i++)
 	{
-		if(token1.text[i] != token2.text[i]) return false;
+		if(token1.text[i] != token2.text[i])
+			return false;
 	}
 	
 	return true;
 }
+
+
 
 static bool 
 func TokenEquals(Token token, char *text)
@@ -308,9 +314,7 @@ func TokenEquals(Token token, char *text)
 	if(text_matches && length_matches)
 	{
 		if(text[token.length] != 0)
-		{
 			length_matches = false;
-		}
 	}
 
 	return (text_matches && length_matches);
@@ -338,21 +342,13 @@ static bool
 func IsAlpha(char c)
 {
 	if(c >= 'a' && c <= 'z')
-	{
 		return true;
-	}
 	else if(c >= 'A' && c <= 'Z')
-	{
 		return true;
-	}
 	else if(c == '_')
-	{
 		return true;
-	}
 	else
-	{
 		return false;
-	}
 }
 
 static void
@@ -368,15 +364,11 @@ func SkipWhiteSpace(CodePosition *pos)
 				pos->col = 1;
 			}
 			else
-			{
 				pos->col++;
-			}
 			pos->at++;
 		}
 		else
-		{
 			break;
-		}
 	}
 }
 
@@ -402,9 +394,7 @@ func ReadCodeLines(ParseInput *input)
 			input->line_n++;
 		}
 		else
-		{
 			input->lines[row].length++;
-		}
 		
 		at++;
 	}
@@ -424,9 +414,7 @@ func ReadToken(ParseInput *input)
 	token.col = pos->col;
 
 	if(pos->at[0] == 0)
-	{
 		token.id = EndOfFileTokenId;
-	}
 	else if(pos->at[0] == '{')
 	{
 		token.id = OpenBracesTokenId;
@@ -534,9 +522,7 @@ func ReadToken(ParseInput *input)
 		}
 
 		if(TokenEquals(token, "#c_code"))
-		{
 			token.id = PoundCCodeTokenId;
-		}
 	}
 	else if(IsDigit(pos->at[0]))
 	{
@@ -548,9 +534,7 @@ func ReadToken(ParseInput *input)
 				pos->at++;
 			}
 			else
-			{
 				break;
-			}
 		}
 		
 		token.id = IntegerConstantTokenId;
@@ -564,37 +548,21 @@ func ReadToken(ParseInput *input)
 		}
 		
 		if(TokenEquals(token, "extern"))
-		{
 			token.id = ExternTokenId;
-		}
 		else if(TokenEquals(token, "for"))
-		{
 			token.id = ForTokenId;
-		}
 		else if(TokenEquals(token, "func"))
-		{
 			token.id = FuncTokenId;
-		}
 		else if(TokenEquals(token, "if"))
-		{
 			token.id = IfTokenId;
-		}
 		else if(TokenEquals(token, "return"))
-		{
 			token.id = ReturnTokenId;
-		}
 		else if(TokenEquals(token, "struct"))
-		{
 			token.id = StructTokenId;
-		}
 		else if(TokenEquals(token, "to"))
-		{
 			token.id = ToTokenId;
-		}
 		else
-		{
 			token.id = NameTokenId;
-		}
 	}
 	else
 	{
@@ -615,19 +583,15 @@ func ReadToken(ParseInput *input)
 static bool
 func ReadTokenId(ParseInput *input, TokenId id)
 {
-	bool result = false;
 	SkipWhiteSpace(input->pos);
 	
 	CodePosition start_pos = *input->pos;
 	
 	Token token = ReadToken(input);
 	if(token.id != id)
-	{
 		*input->pos = start_pos;
-	}
 	
-	result = (token.id == id);
-	return result;
+	return (token.id == id);
 }
 
 static Token
@@ -643,9 +607,8 @@ func ReadTokenUntilClosingBraces(ParseInput *input)
 	while(1)
 	{
 		if(pos->at[0] == '{')
-		{
 			open_braces_count++;
-		}
+
 		if(pos->at[0] == '}')
 		{
 			open_braces_count--;
@@ -656,7 +619,8 @@ func ReadTokenUntilClosingBraces(ParseInput *input)
 			}
 		}
 		
-		if(!pos->at[0]) break;
+		if(!pos->at[0])
+			break;
 		
 		pos->at++;
 		token.length++;
@@ -699,7 +663,8 @@ func GetVar(VarStack *stack, Token name)
 	for(size_t i = 0; i < stack->size; i++)
 	{
 		Var *var = &stack->vars[i];
-		if(TokensEqual(var->name, name)) return var;
+		if(TokensEqual(var->name, name))
+			return var;
 	}
 	return 0;
 }
@@ -727,9 +692,11 @@ func PushVar(VarStack *stack, Var var)
 static bool
 func TypesEqual(VarType *type1, VarType *type2)
 {
-	if(!type1 || !type2) return (type1 == type2);
+	if(!type1 || !type2)
+		return (type1 == type2);
 	
-	if(type1->id != type2->id) return false;
+	if(type1->id != type2->id)
+		return false;
 	
 	switch(type1->id)
 	{
@@ -888,12 +855,14 @@ func ReadNumberLevelExpression(ParseInput *input)
 		else
 		{
 			SetErrorToken(input, "Unexpected token ", name);
+			return 0;
 		}
 	}
 	else
 	{
 		Token token = ReadToken(input);
 		SetErrorToken(input, "Unknown expression ", token);
+		return 0;
 	}
 	
 	while(1)
@@ -929,9 +898,7 @@ func ReadNumberLevelExpression(ParseInput *input)
 			e = (Expression *)PushArrayIndexExpression(&input->arena, e, index);
 		}
 		else
-		{
 			break;
-		}
 	}
 	
 	return e;
@@ -975,9 +942,7 @@ func ReadSumLevelExpression(ParseInput *input)
 			e = (Expression *)PushAddExpression(&input->arena, left, right);
 		}
 		else
-		{
 			break;
-		}
 	}
 	return e;
 }
@@ -1005,9 +970,7 @@ func ReadCompareLevelExpression(ParseInput *input)
 			e = (Expression *)PushLessThanExpression(&input->arena, e, right, input->bool_type);
 		}
 		else
-		{
 			break;
-		}
 	}
 	
 	return e;
@@ -1137,7 +1100,8 @@ typedef struct tdef ForInstruction
 static bool
 func IsValidInitInstruction(Instruction *instruction)
 {
-	if(!instruction) return false;
+	if(!instruction)
+		return false;
 	
 	switch(instruction->id)
 	{
@@ -1154,7 +1118,8 @@ func IsValidInitInstruction(Instruction *instruction)
 static bool
 func IsValidUpdateInstruction(Instruction *instruction)
 {
-	if(!instruction) return true;
+	if(!instruction)
+		return true;
 	
 	switch(instruction->id)
 	{
@@ -1211,9 +1176,7 @@ func ReadForInstruction(ParseInput *input)
 	
 	Instruction *update = 0;
 	if(!PeekTokenId(input, OpenBracesTokenId))
-	{
 		update = ReadInstruction(input);
-	}
 	
 	if(!IsValidUpdateInstruction(update))
 	{
@@ -1323,13 +1286,9 @@ func ReadVarType(ParseInput *input)
 	else if(ReadTokenId(input, NameTokenId))
 	{
 		if(TokenEquals(input->last_token, "int"))
-		{
 			type = input->int_type;
-		}
 		else if(TokenEquals(input->last_token, "uint"))
-		{
 			type = input->uint_type;
-		}
 	}
 	
 	return type;
@@ -1356,11 +1315,10 @@ func ReadNameList(ParseInput *input)
 			list.size++;
 		}
 		else
-		{
 			break;
-		}
 		
-		if(!ReadTokenId(input, CommaTokenId)) break;
+		if(!ReadTokenId(input, CommaTokenId))
+			break;
 	}
 	
 	return list;
@@ -1387,24 +1345,17 @@ func ReadInstruction(ParseInput *input)
 {
 	Instruction *instruction = 0;
 	if(PeekTokenId(input, ForTokenId))
-	{
 		instruction = (Instruction *)ReadForInstruction(input);
-	}
 	else if(PeekTokenId(input, IfTokenId))
-	{
 		instruction = (Instruction *)ReadIfInstruction(input);
-	}
 	else if(PeekTokenId(input, ReturnTokenId))
-	{
 		instruction = (Instruction *)ReadReturnInstruction(input);
-	}
 	else if(PeekTwoTokenIds(input, NameTokenId, ColonEqualsTokenId))
 	{
 		Token var_name = ReadToken(input);
 		if(VarExists(&input->var_stack, var_name))
-		{
 			SetErrorToken(input, "Variable already exists.", var_name);
-		}
+
 		ReadTokenId(input, ColonEqualsTokenId);
 		
 		Expression *init = ReadExpression(input);
@@ -1436,7 +1387,8 @@ func ReadInstruction(ParseInput *input)
 	else
 	{
 		Expression *expression = ReadExpression(input);
-		if(!expression) return 0;
+		if(!expression)
+			return 0;
 		
 		if(ReadTokenId(input, EqualsTokenId))
 		{
@@ -1505,11 +1457,13 @@ func ReadBlock(ParseInput *input)
 	Instruction *last_instruction = 0;
 	while(1)
 	{
-		if(ReadTokenId(input, CloseBracesTokenId)) break;
+		if(ReadTokenId(input, CloseBracesTokenId))
+			break;
 		
 		Instruction *instruction = ReadInstruction(input);
 		
-		if(!instruction) break;
+		if(!instruction)
+			break;
 		
 		if(NeedsSemicolon(instruction->id))
 		{
@@ -1573,7 +1527,8 @@ func ReadReturnInstruction(ParseInput *input)
 	ReadTokenId(input, ReturnTokenId);
 	
 	Expression *value = 0;
-	if(!PeekTokenId(input, SemiColonTokenId)) value = ReadExpression(input);
+	if(!PeekTokenId(input, SemiColonTokenId))
+		value = ReadExpression(input);
 	
 	if(!input->func_definition)
 	{
@@ -1601,27 +1556,22 @@ func ReadFuncHeader(ParseInput *input)
 {
 	Token name = ReadToken(input);
 	if(name.id != NameTokenId)
-	{
 		SetErrorToken(input, "Invalid function name!", name);
-	}
 	
 	if(!ReadTokenId(input, OpenParenTokenId))
-	{
 		SetError(input, "Expected '(' after function name!");
-	}
 	
 	FuncParam *first_param = 0;
 	FuncParam *last_param = 0;
 	while(1)
 	{
-		if(ReadTokenId(input, CloseParenTokenId)) break;
+		if(ReadTokenId(input, CloseParenTokenId))
+			break;
 		
 		if(first_param)
 		{
 			if(!ReadTokenId(input, CommaTokenId))
-			{
 				SetError(input, "Expected ',' between function parameters!");
-			}
 		}
 		
 		NameList name_list = ReadNameList(input);
@@ -1633,6 +1583,7 @@ func ReadFuncHeader(ParseInput *input)
 		if(!ReadTokenId(input, ColonTokenId))
 		{
 			SetError(input, "Expected ':' after function parameter name.");
+			break;
 		}
 		
 		VarType *param_type = ReadVarType(input);
@@ -1642,6 +1593,7 @@ func ReadFuncHeader(ParseInput *input)
 			if(VarExists(&input->var_stack, param_name))
 			{
 				SetErrorToken(input, "Variable already exists, cannot be used as a function parameter ", param_name);
+				break;
 			}
 			
 			FuncParam *param = ArenaPushType(&input->arena, FuncParam);
@@ -1841,21 +1793,13 @@ func ReadDefinition(ParseInput *input)
 	Definition *def = 0;
 	Token token = PeekToken(input);
 	if(token.id == PoundCCodeTokenId)
-	{
 		def = (Definition *)ReadCCodeDefinition(input);
-	}
 	else if(token.id == FuncTokenId)
-	{
 		def = (Definition *)ReadFuncDefinition(input);
-	}
 	else if(token.id == ExternTokenId)
-	{
 		def = (Definition *)ReadExternFuncDefinition(input);
-	}
 	else if(token.id == StructTokenId)
-	{
 		def = (Definition *)ReadStructDefinition(input);
-	}
 	else
 	{
 		SetErrorToken(input, "Expected definition instead of ", token);
@@ -1873,9 +1817,7 @@ func ReadDefinitionList(ParseInput *input)
 	while(1)
 	{
 		if(PeekTokenId(input, EndOfFileTokenId))
-		{
 			break;
-		}
 		
 		Definition *definition = ReadDefinition(input);
 		
@@ -1962,16 +1904,15 @@ int main(int arg_n, char **arg_v)
 	
 	DefinitionList *def_list = ReadDefinitionList(&input);
 	
-	if(input.any_error) return -1;
+	if(input.any_error)
+		return -1;
 #if 0
 	X64Output output = {};
 	output.arena = CreateArena((size_t)64 * 1024);
 	X64WriteDefinitionList(&output, def_list);
 	
 	for(size_t i = 0; i < output.arena.used_size; i++)
-	{
 		fprintf(out, "%c", output.arena.memory[i]);
-	}
 #endif
 	Output output = {};
 	output.arena = CreateArena((size_t)64 * 1024);
@@ -1979,9 +1920,7 @@ int main(int arg_n, char **arg_v)
 	WriteDefinitionList(&output, def_list);
 	
 	for(size_t i = 0; i < output.arena.used_size; i++)
-	{
 		fprintf(out, "%c", output.arena.memory[i]);
-	}
 	
 	return 0;
 }
