@@ -72,6 +72,7 @@ typedef enum tdef TokenId
 	IfTokenId,
 	IntegerConstantTokenId,
 	LessThanTokenId,
+	LessThanEqualTokenId,
 	NameTokenId,
 	OpenBracesTokenId,
 	OpenBracketsTokenId,
@@ -82,6 +83,7 @@ typedef enum tdef TokenId
 	PoundCCodeTokenId,
 	ReturnTokenId,
 	SemiColonTokenId,
+	StarTokenId,
 	StructTokenId,
 	ToTokenId
 } TokenId;
@@ -501,9 +503,18 @@ func ReadToken(ParseInput *input)
 	}
 	else if(pos->at[0] == '<')
 	{
-		token.id = LessThanTokenId;
-		token.length = 1;
-		pos->at++;
+		if(pos->at[1] == '=')
+		{
+			token.id = LessThanEqualTokenId;
+			token.length = 2;
+			pos->at += 2;
+		}
+		else
+		{
+			token.id = LessThanTokenId;
+			token.length = 1;
+			pos->at++;
+		}
 	}
 	else if(pos->at[0] == ',')
 	{
@@ -564,6 +575,12 @@ func ReadToken(ParseInput *input)
 			pos->at++;
 			token.length = 1;
 		}
+	}
+	else if(pos->at[0] == '*')
+	{
+		token.id = StarTokenId;
+		pos->at++;
+		token.length = 1;
 	}
 	else if(pos->at[0] == '#')
 	{
@@ -796,6 +813,8 @@ typedef enum tdef ExpressionId
 	DereferenceExpressionId,
 	IntegerConstantExpressionId,
 	LessThanExpressionId,
+	LessThanEqualExpressionId,
+	MultiplyExpressionId,
 	StructVarExpressionId,
 	VarExpressionId
 } ExpressionId;
@@ -842,7 +861,7 @@ func PushArrayIndexExpression(MemoryArena *arena, Expression *array, Expression 
 	ArrayIndexExpression *e = ArenaPushType(arena, ArrayIndexExpression);
 	e->e.id = ArrayIndexExpressionId;
 	e->e.type = 0;
-	if(array->type->id == 4)
+	if(array->type->id == PointerTypeId)
 	{
 		PointerType *type = (PointerType *)array->type;
 		e->e.type = type->pointed_type;
@@ -927,6 +946,48 @@ func PushLessThanExpression(MemoryArena *arena, Expression *left, Expression *ri
 	LessThanExpression *e = ArenaPushType(arena, LessThanExpression);
 	e->e.id = LessThanExpressionId;
 	e->e.type = bool_type;
+	
+	e->left = left;
+	e->right = right;
+	e->e.modifiable = false;
+	return e;
+}
+
+typedef struct tdef LessThanEqualExpression
+{
+	Expression e;
+	
+	Expression *left;
+	Expression *right;
+} LessThanEqualExpression;
+
+static LessThanEqualExpression *
+func PushLessThanEqualExpression(MemoryArena *arena, Expression *left, Expression *right, VarType *bool_type)
+{
+	LessThanEqualExpression *e = ArenaPushType(arena, LessThanEqualExpression);
+	e->e.id = LessThanEqualExpressionId;
+	e->e.type = bool_type;
+	
+	e->left = left;
+	e->right = right;
+	e->e.modifiable = false;
+	return e;
+}
+
+typedef struct tdef MultiplyExpression
+{
+	Expression e;
+	
+	Expression *left;
+	Expression *right;
+} MultiplyExpression;
+
+static MultiplyExpression *
+func PushMultiplyExpression(MemoryArena *arena, Expression *left, Expression *right)
+{
+	MultiplyExpression *e = ArenaPushType(arena, MultiplyExpression);
+	e->e.id = MultiplyExpressionId;
+	e->e.type = left->type;
 	
 	e->left = left;
 	e->right = right;
@@ -1182,6 +1243,30 @@ static Expression *
 func ReadProductLevelExpression(ParseInput *input)
 {
 	Expression *e = ReadBitLevelExpression(input);
+	while(1)
+	{
+		if(ReadTokenId(input, StarTokenId))
+		{
+			Expression *left = e;
+			Expression *right = ReadBitLevelExpression(input);
+			if(!right)
+			{
+				SetError(input, "Expected expression after '*'.");
+				return 0;
+			}
+			if(!TypesEqual(left->type, right->type))
+			{
+				SetError(input, "Types do not match for '*'.");
+				return 0;
+			}
+			
+			e = (Expression *)PushMultiplyExpression(&input->arena, left, right);
+		}
+		else
+		{
+			break;
+		}
+	}
 	return e;
 }
 
@@ -1209,7 +1294,9 @@ func ReadSumLevelExpression(ParseInput *input)
 			e = (Expression *)PushAddExpression(&input->arena, left, right);
 		}
 		else
+		{
 			break;
+		}
 	}
 	return e;
 }
@@ -1236,8 +1323,26 @@ func ReadCompareLevelExpression(ParseInput *input)
 			
 			e = (Expression *)PushLessThanExpression(&input->arena, e, right, input->bool_type);
 		}
+		else if(ReadTokenId(input, LessThanEqualTokenId))
+		{
+			Expression *right = ReadSumLevelExpression(input);
+			if(!right)
+			{
+				SetError(input, "Expected expression after '<='.");
+				return 0;
+			}
+			if(!TypesEqual(e->type, right->type))
+			{
+				SetError(input, "Types do not match for '<='.");
+				return 0;
+			}
+			
+			e = (Expression *)PushLessThanEqualExpression(&input->arena, e, right, input->bool_type);
+		}
 		else
+		{
 			break;
+		}
 	}
 	
 	return e;

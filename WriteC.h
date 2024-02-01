@@ -185,6 +185,22 @@ func WriteExpression(Output *output, Expression *expression)
 			WriteExpression(output, e->right);
 			break;
 		}
+		case LessThanEqualExpressionId:
+		{
+			LessThanEqualExpression *e = (LessThanEqualExpression *)expression;
+			WriteExpression(output, e->left);
+			WriteString(output, " <= ");
+			WriteExpression(output, e->right);
+			break;
+		}
+		case MultiplyExpressionId:
+		{
+			MultiplyExpression *e = (MultiplyExpression *)expression;
+			WriteExpression(output, e->left);
+			WriteString(output, " * ");
+			WriteExpression(output, e->right);
+			break;
+		}
 		case StructVarExpressionId:
 		{
 			StructVarExpression *e = (StructVarExpression *)expression;
