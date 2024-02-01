@@ -341,6 +341,14 @@ func IsDigit(char c)
 }
 
 static bool
+func IsHexadecimalDigit(char c)
+{
+	return (c >= '0' && c <= '9') || 
+		   (c >= 'a' && c <= 'z') || 
+		   (c >= 'A' && c <= 'Z');
+}
+
+static bool
 func IsNewLine(char c)
 {
 	return (c == '\n' || c == '\r');
@@ -572,15 +580,37 @@ func ReadToken(ParseInput *input)
 	}
 	else if(IsDigit(pos->at[0]))
 	{
-		while(1)
+		if(pos->at[0] == '0' && pos->at[1] == 'x' && IsHexadecimalDigit(pos->at[2]))
 		{
-			if(IsDigit(pos->at[0]))
+			pos->at += 2;
+			token.length = 2;
+			while(1)
 			{
-				token.length++;
-				pos->at++;
+				if(IsHexadecimalDigit(pos->at[0]))
+				{
+					token.length++;
+					pos->at++;
+				}
+				else
+				{
+					break;
+				}
 			}
-			else
-				break;
+		}
+		else
+		{
+			while(1)
+			{
+				if(IsDigit(pos->at[0]))
+				{
+					token.length++;
+					pos->at++;
+				}
+				else
+				{
+					break;
+				}
+			}
 		}
 		
 		token.id = IntegerConstantTokenId;
