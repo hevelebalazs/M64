@@ -57,6 +57,7 @@ typedef enum tdef TokenId
 	CCodeTokenId,
 	CloseBracesTokenId,
 	CloseBracketsTokenId,
+	CloseBracketsCloseBracketsTokenId,
 	CloseParenTokenId,
 	CommaTokenId,
 	ColonEqualsTokenId,
@@ -73,6 +74,7 @@ typedef enum tdef TokenId
 	NameTokenId,
 	OpenBracesTokenId,
 	OpenBracketsTokenId,
+	OpenBracketsOpenBracketsTokenId,
 	OpenParenTokenId,
 	PlusPlusTokenId,
 	PlusTokenId,
@@ -448,15 +450,33 @@ func ReadToken(ParseInput *input)
 	}
 	else if(pos->at[0] == '[')
 	{
-		token.id = OpenBracketsTokenId;
-		token.length = 1;
-		pos->at++;
+		if(pos->at[1] == '[')
+		{
+			token.id = OpenBracketsOpenBracketsTokenId;
+			token.length = 2;
+			pos->at += 2;
+		}
+		else
+		{
+			token.id = OpenBracketsTokenId;
+			token.length = 1;
+			pos->at++;
+		}
 	}
 	else if(pos->at[0] == ']')
 	{
-		token.id = CloseBracketsTokenId;
-		token.length = 1;
-		pos->at++;
+		if(pos->at[1] == ']')
+		{
+			token.id = CloseBracketsCloseBracketsTokenId;
+			token.length = 2;
+			pos->at += 2;
+		}
+		else
+		{
+			token.id = CloseBracketsTokenId;
+			token.length = 1;
+			pos->at++;
+		}
 	}
 	else if(pos->at[0] == '(')
 	{
@@ -735,6 +755,7 @@ typedef enum tdef ExpressionId
 {
 	AddExpressionId,
 	ArrayIndexExpressionId,
+	DereferenceExpressionId,
 	IntegerConstantExpressionId,
 	LessThanExpressionId,
 	StructVarExpressionId,
@@ -792,6 +813,24 @@ func PushArrayIndexExpression(MemoryArena *arena, Expression *array, Expression 
 	e->array = array;
 	e->index = index;
 	e->e.modifiable = true;
+	return e;
+}
+
+typedef struct tdef DereferenceExpression
+{
+	Expression e;
+	
+	Expression *pointer;
+} DereferenceExpression;
+
+static DereferenceExpression *
+func PushDereferenceExpression(MemoryArena *arena, Expression *pointer)
+{
+	DereferenceExpression *e = ArenaPushType(arena, DereferenceExpression);
+	e->e.id = DereferenceExpressionId;
+	e->e.type = ((PointerType *)pointer->type)->pointed_type;
+	
+	e->pointer = pointer;
 	return e;
 }
 
@@ -940,6 +979,23 @@ func ReadNumberLevelExpression(ParseInput *input)
 		else
 		{
 			SetErrorToken(input, "Unexpected token ", name);
+			return 0;
+		}
+	}
+	else if(ReadTokenId(input, OpenBracketsOpenBracketsTokenId))
+	{
+		Expression *p = ReadExpression(input);
+		if(p->type->id != PointerTypeId)
+		{
+			SetError(input, "Dereferencing non-pointer expression!");
+			return 0;
+		}
+		
+		e = (Expression *)PushDereferenceExpression(&input->arena, p);
+		
+		if(!ReadTokenId(input, CloseBracketsCloseBracketsTokenId))
+		{
+			SetError(input, "Expected ']]' for dereference expression.");
 			return 0;
 		}
 	}
