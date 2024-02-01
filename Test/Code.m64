@@ -5,15 +5,27 @@ struct Bitmap
 	height: int;
 }
 
-func UpdateBitmap(bitmap : @Bitmap)
+func FillWithColor(bitmap: @Bitmap, color: uint)
 {
 	pixel := bitmap.memory;
 	for row := 0; row < bitmap.height; row++
 	{
 		for col := 0; col < bitmap.width; col++
 		{
-			[[pixel]] = uint::0x005555;
+			[[pixel]] = color;
 			pixel++;
+		}
+	}
+}
+
+func DrawRectMinMax(bitmap: @Bitmap, min_row, min_col, max_row, max_col: int, color: uint)
+{
+	for row := min_row; row <= max_row; row++
+	{
+		for col := min_col; col <= max_col; col++
+		{
+			index := row * bitmap.width + col;
+			bitmap.memory[index] = color;
 		}
 	}
 }

@@ -19,7 +19,9 @@ static void ResizeBitmap(Bitmap *bitmap, int width, int height)
 
 static void DrawScene(Bitmap *bitmap)
 {
-	UpdateBitmap(bitmap);
+	FillWithColor(bitmap, (unsigned int)0x000000);
+	
+	DrawRectMinMax(bitmap, 10, 10, 20, 20, (unsigned int)0xFFFFFF);
 }
 
 LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
