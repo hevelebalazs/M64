@@ -77,6 +77,17 @@ func WriteType(Output *output, VarType *type)
 			WriteString(output, " *");
 			break;
 		}
+		case StructTypeId:
+		{
+			StructType *t = (StructType *)type;
+			WriteToken(output, t->def->name);
+			break;
+		}
+		default:
+		{
+			printf("Unknown var type %i!\n", (int)type->id);
+			break;
+		}
 	}
 }
 
@@ -127,6 +138,14 @@ func WriteExpression(Output *output, Expression *expression)
 {
 	switch(expression->id)
 	{
+		case AddExpressionId:
+		{
+			AddExpression *e = (AddExpression *)expression;
+			WriteExpression(output, e->left);
+			WriteString(output, " + ");
+			WriteExpression(output, e->right);
+			break;
+		}
 		case ArrayIndexExpressionId:
 		{
 			ArrayIndexExpression *e = (ArrayIndexExpression *)expression;
@@ -134,6 +153,22 @@ func WriteExpression(Output *output, Expression *expression)
 			WriteString(output, "[");
 			WriteExpression(output, e->index);
 			WriteString(output, "]");
+			break;
+		}
+		case CastExpressionId:
+		{
+			CastExpression *e = (CastExpression *)expression;
+			WriteString(output, "(");
+			WriteType(output, e->type);
+			WriteString(output, ")");
+			WriteExpression(output, e->value);
+			break;
+		}
+		case DereferenceExpressionId:
+		{
+			DereferenceExpression *e = (DereferenceExpression *)expression;
+			WriteString(output, "*");
+			WriteExpression(output, e->pointer);
 			break;
 		}
 		case IntegerConstantExpressionId:
@@ -150,10 +185,33 @@ func WriteExpression(Output *output, Expression *expression)
 			WriteExpression(output, e->right);
 			break;
 		}
+		case StructVarExpressionId:
+		{
+			StructVarExpression *e = (StructVarExpression *)expression;
+			WriteExpression(output, e->base);
+			
+			if(e->base->type->id == PointerTypeId)
+			{
+				WriteString(output, "->");
+			}
+			else
+			{
+				WriteString(output, ".");
+			}
+			
+			WriteToken(output, e->var_name);
+			
+			break;
+		}
 		case VarExpressionId:
 		{
 			VarExpression *e = (VarExpression *)expression;
 			WriteToken(output, e->var.name);
+			break;
+		}
+		default:
+		{
+			printf("Unknown expression type %i!\n", (int)expression->id);
 			break;
 		}
 	}
@@ -240,6 +298,11 @@ func WriteInstruction(Output *output, Instruction *instruction)
 			WriteExpression(output, i->value);
 			break;
 		}
+		default:
+		{
+			printf("Unknown instruction type: %i\n", instruction->id);
+			break;
+		}
 	}
 }
 
@@ -257,7 +320,11 @@ func WriteBlock(Output *output, BlockInstruction *block)
 		WriteTabs(output);
 		WriteInstruction(output, instruction);
 
-		if(NeedsSemicolon(instruction->id)) WriteString(output, ";");
+		if(NeedsSemicolon(instruction->id))
+		{
+			WriteString(output, ";");
+		}
+		
 		WriteString(output, "\n");
 		
 		instruction = instruction->next;
@@ -266,7 +333,7 @@ func WriteBlock(Output *output, BlockInstruction *block)
 	output->tabs--;
 	
 	WriteTabs(output);
-	WriteString(output, "}\n");
+	WriteString(output, "}");
 }
 
 static void

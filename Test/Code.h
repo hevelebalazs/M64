@@ -5,17 +5,15 @@ typedef struct Bitmap
     int height;
 } Bitmap;
 
-void UpdateBitmap( *bitmap)
+void UpdateBitmap(Bitmap *bitmap)
 {
-    unsigned int *pixel = ;
-    for(int row = 0; row < ; row++)
+    unsigned int *pixel = bitmap->memory;
+    for(int row = 0; row < bitmap->height; row++)
     {
-        for(int col = 0; col < ; col++)
+        for(int col = 0; col < bitmap->width; col++)
         {
-             = ;
+            *pixel = (unsigned int)0x005555;
             pixel++;
         }
-
     }
-
 }

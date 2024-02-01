@@ -870,6 +870,7 @@ func PushCastExpression(MemoryArena *arena, VarType *type, Expression *value)
 	e->e.type = type;
 	e->e.modifiable = value->modifiable;
 	
+	e->type = type;
 	e->value = value;
 	return e;
 }
@@ -1039,7 +1040,7 @@ func ReadNumberLevelExpression(ParseInput *input)
 		{
 			return 0;
 		}
-		
+
 		e = (Expression *)PushCastExpression(&input->arena, type, value);
 	}
 	else if(ReadTokenId(input, IntegerConstantTokenId))
