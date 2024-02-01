@@ -61,6 +61,7 @@ typedef enum tdef TokenId
 	CommaTokenId,
 	ColonEqualsTokenId,
 	ColonTokenId,
+	DotTokenId,
 	EndOfFileTokenId,
 	EqualsTokenId,
 	ExternTokenId,
@@ -424,7 +425,15 @@ func ReadToken(ParseInput *input)
 	token.col = pos->col;
 
 	if(pos->at[0] == 0)
+	{
 		token.id = EndOfFileTokenId;
+	}
+	else if(pos->at[0] == '.')
+	{
+		token.id = DotTokenId;
+		token.length = 1;
+		pos->at++;
+	}
 	else if(pos->at[0] == '{')
 	{
 		token.id = OpenBracesTokenId;
@@ -728,6 +737,7 @@ typedef enum tdef ExpressionId
 	ArrayIndexExpressionId,
 	IntegerConstantExpressionId,
 	LessThanExpressionId,
+	StructVarExpressionId,
 	VarExpressionId
 } ExpressionId;
 
@@ -825,6 +835,57 @@ func PushLessThanExpression(MemoryArena *arena, Expression *left, Expression *ri
 	return e;
 }
 
+typedef struct tdef StructVarExpression
+{
+	Expression e;
+	
+	Expression *base;
+	Token var_name;
+} StructVarExpression;
+
+typedef enum tdef DefinitionId
+{
+	CCodeDefinitionId,
+	ExternFuncDefinitionId,
+	FuncDefinitionId,
+	StructDefinitionId
+} DefinitionId;
+
+typedef struct tdef Definition
+{
+	DefinitionId id;
+} Definition;
+
+typedef struct tdef StructVar
+{
+	Token name;
+	VarType *type;
+	struct StructVar *next;
+} StructVar;
+
+typedef struct tdef StructDefinition
+{
+	Definition def;
+	
+	struct StructDefinition *next;
+
+	Token name;
+	StructVar *first_var;
+} StructDefinition;
+
+static StructVarExpression *
+func PushStructVarExpression(MemoryArena *arena, Expression *base, StructVar *var)
+{
+	StructVarExpression *e = ArenaPushType(arena, StructVarExpression);
+	e->e.id = StructVarExpressionId;
+	
+	e->e.type = var->type;
+	e->base = base;
+	e->var_name = var->name;
+	e->e.modifiable = true;
+	return e;
+}
+
 typedef struct tdef VarExpression
 {
 	Expression e;
@@ -842,6 +903,20 @@ func PushVarExpression(MemoryArena *arena, Var var)
 	e->var = var;
 	e->e.modifiable = true;
 	return e;
+}
+
+static StructVar *
+func GetStructVar(StructDefinition *def, Token name)
+{
+	for(StructVar *var = def->first_var; var; var = var->next)
+	{
+		if(TokensEqual(var->name, name))
+		{
+			return var;
+		}
+	}
+	
+	return 0;
 }
 
 static Expression *decl ReadExpression(ParseInput *);
@@ -907,8 +982,56 @@ func ReadNumberLevelExpression(ParseInput *input)
 			
 			e = (Expression *)PushArrayIndexExpression(&input->arena, e, index);
 		}
+		else if(ReadTokenId(input, DotTokenId))
+		{
+			if(!e || !e->type)
+			{
+				SetError(input, "Expected expression before '.'.");
+				return 0;
+			}
+			
+			StructType *struct_type = 0;
+			if(e->type->id == StructTypeId)
+			{
+				struct_type = (StructType *)e->type;
+			}
+			else if(e->type->id == PointerTypeId)
+			{
+				VarType *base_type = ((PointerType *)e->type)->pointed_type;
+				if(base_type->id != StructTypeId)
+				{
+					SetError(input, "Non-struct pointer expression before '.'");
+					return 0;
+				}
+				struct_type = (StructType *)base_type;
+			}
+			else
+			{
+				SetError(input, "Non-struct expression before '.'.");
+				return 0;
+			}
+			
+			StructDefinition *def = struct_type->def;
+			if(!ReadTokenId(input, NameTokenId))
+			{
+				SetError(input, "Expected struct variable name after '.'.");
+				return 0;
+			}
+			
+			Token var_name = input->last_token;
+			StructVar *var = GetStructVar(def, var_name);
+			if(!var)
+			{
+				SetErrorToken(input, "Unknown struct variable name.", var_name);
+				return 0;
+			}
+			
+			e = (Expression *)PushStructVarExpression(&input->arena, e, var);
+		}
 		else
+		{
 			break;
+		}
 	}
 	
 	return e;
@@ -1213,19 +1336,6 @@ typedef struct tdef ReturnInstruction
 	Expression *value;
 } ReturnInstruction;
 
-typedef enum tdef DefinitionId
-{
-	CCodeDefinitionId,
-	ExternFuncDefinitionId,
-	FuncDefinitionId,
-	StructDefinitionId
-} DefinitionId;
-
-typedef struct tdef Definition
-{
-	DefinitionId id;
-} Definition;
-
 typedef struct tdef DefinitionList
 {
 	Definition *definition;
@@ -1276,23 +1386,6 @@ func PushPointerType(MemoryArena *arena, VarType *pointed_type)
 	type->pointed_type = pointed_type;
 	return type;
 }
-
-typedef struct tdef StructVar
-{
-	Token name;
-	VarType *type;
-	struct StructVar *next;
-} StructVar;
-
-typedef struct tdef StructDefinition
-{
-	Definition def;
-	
-	struct StructDefinition *next;
-
-	Token name;
-	StructVar *first_var;
-} StructDefinition;
 
 static StructType *
 func PushStructType(MemoryArena *arena, StructDefinition *def)
@@ -1377,10 +1470,14 @@ func ReadNameList(ParseInput *input)
 			list.size++;
 		}
 		else
+		{
 			break;
+		}
 		
 		if(!ReadTokenId(input, CommaTokenId))
+		{
 			break;
+		}
 	}
 	
 	return list;
@@ -1766,7 +1863,9 @@ func ReadStructDefinition(ParseInput *input)
 	while(1)
 	{
 		if(ReadTokenId(input, CloseBracesTokenId))
+		{
 			break;
+		}
 	
 		NameList name_list = ReadNameList(input);
 		if(name_list.size == 0)
@@ -1783,7 +1882,9 @@ func ReadStructDefinition(ParseInput *input)
 		
 		VarType *type = ReadVarType(input);
 		if(type == 0)
+		{
 			return 0;
+		}
 		
 		for(size_t i = 0; i < name_list.size; i++)
 		{
