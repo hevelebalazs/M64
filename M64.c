@@ -994,7 +994,25 @@ static Expression *
 func ReadNumberLevelExpression(ParseInput *input)
 {
 	Expression *e = 0;
-	if(ReadTokenId(input, IntegerConstantTokenId))
+	
+	VarType *type = ReadVarType(input);
+	if(type)
+	{
+		if(!ReadTokenId(input, ColonColonTokenId))
+		{
+			SetError(input, "Expected '::' after variable type.");
+			return 0;
+		}
+		
+		Expression *value = ReadExpression(input);
+		if(!value)
+		{
+			return 0;
+		}
+		
+		e = (Expression *)PushCastExpression(&input->arena, type, value);
+	}
+	else if(ReadTokenId(input, IntegerConstantTokenId))
 	{
 		e = (Expression *)PushIntegerConstantExpression(&input->arena, input->last_token, input->int_type);
 	}
@@ -1031,29 +1049,8 @@ func ReadNumberLevelExpression(ParseInput *input)
 	}
 	else
 	{
-		VarType *type = ReadVarType(input);
-		if(type)
-		{
-			if(!ReadTokenId(input, ColonColonTokenId))
-			{
-				SetError(input, "Expected '::' after variable type.");
-				return 0;
-			}
-			
-			Expression *value = ReadExpression(input);
-			if(!value)
-			{
-				return 0;
-			}
-			
-			e = (Expression *)PushCastExpression(&input->arena, type, value);
-		}
-		else
-		{
-			Token token = ReadToken(input);
-			SetErrorToken(input, "Unknown expression ", token);
-			return 0;
-		}
+		SetError(input, "Unknown expression.");
+		return 0;
 	}
 	
 	while(1)
@@ -1519,6 +1516,8 @@ func GetStructDefinition(ParseInput *input, Token name)
 static VarType *
 func ReadVarType(ParseInput *input)
 {
+	CodePosition start_pos = *input->pos;
+	
 	VarType *type = 0;
 	
 	if(ReadTokenId(input, AtTokenId))
@@ -1550,6 +1549,11 @@ func ReadVarType(ParseInput *input)
 				type = (VarType *)PushStructType(&input->arena, def);
 			}
 		}
+	}
+	
+	if(!type)
+	{
+		*input->pos = start_pos;
 	}
 	
 	return type;
