@@ -1861,22 +1861,30 @@ func ReadFuncHeader(ParseInput *input)
 {
 	Token name = ReadToken(input);
 	if(name.id != NameTokenId)
+	{
 		SetErrorToken(input, "Invalid function name!", name);
+	}
 	
 	if(!ReadTokenId(input, OpenParenTokenId))
+	{
 		SetError(input, "Expected '(' after function name!");
+	}
 	
 	FuncParam *first_param = 0;
 	FuncParam *last_param = 0;
 	while(1)
 	{
 		if(ReadTokenId(input, CloseParenTokenId))
+		{
 			break;
+		}
 		
 		if(first_param)
 		{
 			if(!ReadTokenId(input, CommaTokenId))
+			{
 				SetError(input, "Expected ',' between function parameters!");
+			}
 		}
 		
 		NameList name_list = ReadNameList(input);
@@ -1929,12 +1937,15 @@ func ReadFuncHeader(ParseInput *input)
 	header.name = name;
 	header.first_param = first_param;
 	header.return_type = return_type;
+	
 	return header;
 }
 
 static FuncDefinition *
 func ReadFuncDefinition(ParseInput *input)
 {
+	StackState stack_state = GetStackState(input);
+	
 	ReadTokenId(input, FuncTokenId);	
 	
 	FuncDefinition *prev_func_definition = input->func_definition;
@@ -1944,7 +1955,9 @@ func ReadFuncDefinition(ParseInput *input)
 	
 	FuncHeader header = ReadFuncHeader(input);
 	if(input->any_error)
+	{
 		return 0;
+	}
 	def->header = header;
 	
 	input->func_definition = def;
@@ -1959,6 +1972,8 @@ func ReadFuncDefinition(ParseInput *input)
 	def->body = body;
 	
 	input->func_definition = prev_func_definition;
+	
+	SetStackState(input, stack_state);
 	
 	return def;
 }
