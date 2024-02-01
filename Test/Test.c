@@ -19,16 +19,7 @@ static void ResizeBitmap(Bitmap *bitmap, int width, int height)
 
 static void DrawScene(Bitmap *bitmap)
 {
-	unsigned int color = 0xAA5500;
-	unsigned int *pixel = bitmap->memory;
-	for(int row = 0; row < bitmap->height; row++)
-	{
-		for(int col = 0; col < bitmap->width; col++)
-		{
-			*pixel = color;
-			pixel++;
-		}
-	}
+	UpdateBitmap(bitmap);
 }
 
 LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
