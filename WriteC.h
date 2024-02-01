@@ -2,6 +2,8 @@ typedef struct tdef Output
 {
 	MemoryArena arena;
 	size_t tabs;
+	
+	bool error;
 } Output;
 
 static void 
@@ -66,6 +68,8 @@ func WriteType(Output *output, VarType *type)
 				default:
 				{
 					printf("Unknown base type %i\n", (int)t->base_id);
+					output->error = true;
+					break;
 				}
 			}
 			break;
@@ -86,6 +90,7 @@ func WriteType(Output *output, VarType *type)
 		default:
 		{
 			printf("Unknown var type %i!\n", (int)type->id);
+			output->error = true;
 			break;
 		}
 	}
@@ -228,6 +233,7 @@ func WriteExpression(Output *output, Expression *expression)
 		default:
 		{
 			printf("Unknown expression type %i!\n", (int)expression->id);
+			output->error = true;
 			break;
 		}
 	}
@@ -317,6 +323,7 @@ func WriteInstruction(Output *output, Instruction *instruction)
 		default:
 		{
 			printf("Unknown instruction type: %i\n", instruction->id);
+			output->error = true;
 			break;
 		}
 	}
@@ -419,6 +426,8 @@ func WriteDefinitionList(Output *output, DefinitionList *def_list)
 			default:
 			{
 				printf("Unknown definition type %i!\n", (int)definition->id);
+				output->error = true;
+				break;
 			}
 		}
 		

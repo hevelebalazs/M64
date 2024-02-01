@@ -2344,7 +2344,9 @@ int main(int arg_n, char **arg_v)
 	DefinitionList *def_list = ReadDefinitionList(&input);
 	
 	if(input.any_error)
+	{
 		return -1;
+	}
 #if 0
 	X64Output output = {};
 	output.arena = CreateArena((size_t)64 * 1024);
@@ -2357,9 +2359,15 @@ int main(int arg_n, char **arg_v)
 	output.arena = CreateArena((size_t)64 * 1024);
 	output.tabs = 0;
 	WriteDefinitionList(&output, def_list);
+	if(output.error)
+	{
+		return -1;
+	}
 	
 	for(size_t i = 0; i < output.arena.used_size; i++)
+	{
 		fprintf(out, "%c", output.arena.memory[i]);
+	}
 	
 	return 0;
 }
