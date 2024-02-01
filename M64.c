@@ -1719,7 +1719,12 @@ func ReadInstruction(ParseInput *input)
 				return 0;
 			}
 			
-			if(!TypesEqual(expression->type, input->int_type) && !TypesEqual(expression->type, input->uint_type))
+			bool can_increment = false;
+			can_increment |= TypesEqual(expression->type, input->int_type);
+			can_increment |= TypesEqual(expression->type, input->uint_type);
+			can_increment |= expression->type->id == PointerTypeId;
+			
+			if(!can_increment)
 			{
 				SetError(input, "Invalid type for '++'.");
 				return 0;
