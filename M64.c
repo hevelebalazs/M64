@@ -60,6 +60,7 @@ typedef enum tdef TokenId
 	CloseBracketsCloseBracketsTokenId,
 	CloseParenTokenId,
 	CommaTokenId,
+	ColonColonTokenId,
 	ColonEqualsTokenId,
 	ColonTokenId,
 	DotTokenId,
@@ -510,6 +511,12 @@ func ReadToken(ParseInput *input)
 			token.length = 2;
 			pos->at += 2;
 		}
+		else if(pos->at[1] == ':')
+		{
+			token.id = ColonColonTokenId;
+			token.length = 2;
+			pos->at += 2;
+		}
 		else
 		{
 			token.id = ColonTokenId;
@@ -755,6 +762,7 @@ typedef enum tdef ExpressionId
 {
 	AddExpressionId,
 	ArrayIndexExpressionId,
+	CastExpressionId,
 	DereferenceExpressionId,
 	IntegerConstantExpressionId,
 	LessThanExpressionId,
@@ -816,6 +824,26 @@ func PushArrayIndexExpression(MemoryArena *arena, Expression *array, Expression 
 	return e;
 }
 
+typedef struct tdef CastExpression
+{
+	Expression e;
+	
+	VarType *type;
+	Expression *value;
+} CastExpression;
+
+static CastExpression *
+func PushCastExpression(MemoryArena *arena, VarType *type, Expression *value)
+{
+	CastExpression *e = ArenaPushType(arena, CastExpression);
+	e->e.id = CastExpressionId;
+	e->e.type = type;
+	e->e.modifiable = value->modifiable;
+	
+	e->value = value;
+	return e;
+}
+
 typedef struct tdef DereferenceExpression
 {
 	Expression e;
@@ -829,6 +857,7 @@ func PushDereferenceExpression(MemoryArena *arena, Expression *pointer)
 	DereferenceExpression *e = ArenaPushType(arena, DereferenceExpression);
 	e->e.id = DereferenceExpressionId;
 	e->e.type = ((PointerType *)pointer->type)->pointed_type;
+	e->e.modifiable = true;
 	
 	e->pointer = pointer;
 	return e;
@@ -959,6 +988,7 @@ func GetStructVar(StructDefinition *def, Token name)
 }
 
 static Expression *decl ReadExpression(ParseInput *);
+static VarType *decl ReadVarType(ParseInput *);
 
 static Expression *
 func ReadNumberLevelExpression(ParseInput *input)
@@ -1001,9 +1031,29 @@ func ReadNumberLevelExpression(ParseInput *input)
 	}
 	else
 	{
-		Token token = ReadToken(input);
-		SetErrorToken(input, "Unknown expression ", token);
-		return 0;
+		VarType *type = ReadVarType(input);
+		if(type)
+		{
+			if(!ReadTokenId(input, ColonColonTokenId))
+			{
+				SetError(input, "Expected '::' after variable type.");
+				return 0;
+			}
+			
+			Expression *value = ReadExpression(input);
+			if(!value)
+			{
+				return 0;
+			}
+			
+			e = (Expression *)PushCastExpression(&input->arena, type, value);
+		}
+		else
+		{
+			Token token = ReadToken(input);
+			SetErrorToken(input, "Unknown expression ", token);
+			return 0;
+		}
 	}
 	
 	while(1)
