@@ -12,7 +12,8 @@ func UpdateBitmap(bitmap : @Bitmap)
 	{
 		for col := 0; col < bitmap.width; col++
 		{
-			pixel@ = uint::0xAA5500;
+			[[pixel]] = uint::0xAA5500;
+			pixel++;
 		}
 	}
 }

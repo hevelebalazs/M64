@@ -95,7 +95,8 @@ typedef enum tdef VarTypeId
 {
 	NoTypeId,
 	BaseTypeId,
-	PointerTypeId
+	PointerTypeId,
+	StructTypeId
 } VarTypeId;
 
 typedef struct tdef VarType
@@ -138,6 +139,13 @@ typedef struct tdef PointerType
 	
 	VarType *pointed_type;
 } PointerType;
+
+typedef struct tdef StructType
+{
+	VarType type;
+	
+	struct StructDefinition *def;
+} StructType;
 
 static bool
 func IsBoolType(VarType *type)
@@ -192,6 +200,8 @@ typedef struct tdef ParseInput
 	VarStack var_stack;
 	bool any_error;
 	Token last_token;
+	
+	struct StructDefinition *first_struct_definition;
 	
 	struct FuncDefinition *func_definition;
 	
@@ -763,7 +773,7 @@ func PushArrayIndexExpression(MemoryArena *arena, Expression *array, Expression 
 	ArrayIndexExpression *e = ArenaPushType(arena, ArrayIndexExpression);
 	e->e.id = ArrayIndexExpressionId;
 	e->e.type = 0;
-	if(array->type->id == PointerTypeId)
+	if(array->type->id == 4)
 	{
 		PointerType *type = (PointerType *)array->type;
 		e->e.type = type->pointed_type;
@@ -1267,6 +1277,46 @@ func PushPointerType(MemoryArena *arena, VarType *pointed_type)
 	return type;
 }
 
+typedef struct tdef StructVar
+{
+	Token name;
+	VarType *type;
+	struct StructVar *next;
+} StructVar;
+
+typedef struct tdef StructDefinition
+{
+	Definition def;
+	
+	struct StructDefinition *next;
+
+	Token name;
+	StructVar *first_var;
+} StructDefinition;
+
+static StructType *
+func PushStructType(MemoryArena *arena, StructDefinition *def)
+{
+	StructType *type = ArenaPushType(arena, StructType);
+	type->type.id = StructTypeId;
+	type->def = def;
+	return type;
+}
+
+static StructDefinition *
+func GetStructDefinition(ParseInput *input, Token name)
+{
+	for(StructDefinition *def = input->first_struct_definition; def; def = def->next)
+	{
+		if(TokensEqual(def->name, name))
+		{
+			return def;
+		}
+	}
+	
+	return 0;
+}
+
 static VarType *
 func ReadVarType(ParseInput *input)
 {
@@ -1286,9 +1336,21 @@ func ReadVarType(ParseInput *input)
 	else if(ReadTokenId(input, NameTokenId))
 	{
 		if(TokenEquals(input->last_token, "int"))
+		{
 			type = input->int_type;
+		}
 		else if(TokenEquals(input->last_token, "uint"))
+		{
 			type = input->uint_type;
+		}
+		else
+		{			
+			StructDefinition *def = GetStructDefinition(input, input->last_token);
+			if(def)
+			{
+				type = (VarType *)PushStructType(&input->arena, def);
+			}
+		}
 	}
 	
 	return type;
@@ -1658,20 +1720,19 @@ func ReadFuncDefinition(ParseInput *input)
 	return def;
 }
 
-typedef struct tdef StructVar
+static bool
+func HasStruct(ParseInput *input, Token name)
 {
-	Token name;
-	VarType *type;
-	struct StructVar *next;
-} StructVar;
-
-typedef struct tdef StructDefinition
-{
-	Definition def;
-
-	Token name;
-	StructVar *first_var;
-} StructDefinition;
+	for(StructDefinition *def = input->first_struct_definition; def; def = def->next)
+	{
+		if(TokensEqual(def->name, name))
+		{
+			return true;
+		}
+	}
+	
+	return false;
+}
 
 static StructDefinition *
 func ReadStructDefinition(ParseInput *input)
@@ -1681,6 +1742,13 @@ func ReadStructDefinition(ParseInput *input)
 	def->def.id = StructDefinitionId;
 	
 	Token name = ReadToken(input);
+	
+	if(HasStruct(input, name))
+	{
+		SetErrorToken(input, "Struct already exists!", name);
+		return 0;
+	}
+	
 	if(name.id != NameTokenId)
 	{
 		SetErrorToken(input, "Invalid struct name!", name);
@@ -1745,6 +1813,10 @@ func ReadStructDefinition(ParseInput *input)
 	
 	def->name = name;
 	def->first_var = first_var;
+	
+	def->next = input->first_struct_definition;
+	input->first_struct_definition = def;
+	
 	return def;
 }
 
