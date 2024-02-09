@@ -33,9 +33,9 @@ struct Quad2
 	p: [4]float;
 }
 
-operator float2(x, y: float) float2
+func Float2XY(x, y: float) float2
 {
-	result : float2;
+	result: float2;
 	result.x = x;
 	result.y = y;
 	return result;
@@ -74,7 +74,7 @@ func DrawQuad2(bitmap: @Bitmap, quad: Quad2, color: uint)
 	{
 		for col := int::min_x; col < int::max_x + 1; col++
 		{
-			p := float2(float::col, float::row);
+			p := Float2XY(float::col, float::row);
 			if IsPointInQuad(p, quad)
 			{
 				SetPixelColor(bitmap, row, col, color);

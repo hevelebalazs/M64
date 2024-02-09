@@ -1807,16 +1807,56 @@ func ReadInstruction(ParseInput *input)
 {
 	Instruction *instruction = 0;
 	if(PeekTokenId(input, ForTokenId))
+	{
 		instruction = (Instruction *)ReadForInstruction(input);
+	}
 	else if(PeekTokenId(input, IfTokenId))
+	{
 		instruction = (Instruction *)ReadIfInstruction(input);
+	}
 	else if(PeekTokenId(input, ReturnTokenId))
+	{
 		instruction = (Instruction *)ReadReturnInstruction(input);
+	}
+	else if(PeekTwoTokenIds(input, NameTokenId, ColonTokenId))
+	{
+		Token var_name = ReadToken(input);
+		if(VarExists(&input->var_stack, var_name))
+		{
+			SetError(input, "Variable already exists.");
+			return 0;
+		}
+		
+		ReadTokenId(input, ColonTokenId);
+		
+		VarType *type = ReadVarType(input);
+		if(!type)
+		{
+			SetError(input, "Expected variable type.");
+			return 0;
+		}
+		
+		CreateVariableInstruction *cv = ArenaPushType(&input->arena, CreateVariableInstruction);
+		cv->i.id = CreateVariableInstructionId;
+		cv->i.next = 0;
+		cv->name = var_name;
+		cv->init = 0;
+		cv->type = type;
+		instruction = (Instruction *)cv;
+		
+		Var var = {};
+		var.name = var_name;
+		var.type = type;
+		PushVar(&input->var_stack, var);
+	}
 	else if(PeekTwoTokenIds(input, NameTokenId, ColonEqualsTokenId))
 	{
 		Token var_name = ReadToken(input);
 		if(VarExists(&input->var_stack, var_name))
-			SetErrorToken(input, "Variable already exists.", var_name);
+		{
+			SetError(input, "Variable already exists.");
+			return 0;
+		}
 
 		ReadTokenId(input, ColonEqualsTokenId);
 		
@@ -1850,7 +1890,9 @@ func ReadInstruction(ParseInput *input)
 	{
 		Expression *expression = ReadExpression(input);
 		if(!expression)
-			return 0;
+		{
+			return 0;	
+		}
 		
 		if(ReadTokenId(input, EqualsTokenId))
 		{
