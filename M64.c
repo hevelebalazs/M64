@@ -1154,7 +1154,7 @@ func ReadNumberLevelExpression(ParseInput *input)
 			return 0;
 		}
 		
-		Expression *value = ReadExpression(input);
+		Expression *value = ReadNumberLevelExpression(input);
 		if(!value)
 		{
 			return 0;
