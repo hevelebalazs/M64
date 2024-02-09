@@ -879,6 +879,11 @@ func PushArrayIndexExpression(MemoryArena *arena, Expression *array, Expression 
 		PointerType *type = (PointerType *)array->type;
 		e->e.type = type->pointed_type;
 	}
+	else if(array->type->id == ArrayTypeId)
+	{
+		ArrayType *type = (ArrayType *)array->type;
+		e->e.type = type->element_type;
+	}
 	
 	e->array = array;
 	e->index = index;
@@ -1162,7 +1167,7 @@ func ReadNumberLevelExpression(ParseInput *input)
 	{
 		if(ReadTokenId(input, OpenBracketsTokenId))
 		{
-			if(!e || !e->type || e->type->id != PointerTypeId)
+			if(!e || !e->type || (e->type->id != PointerTypeId && e->type->id != ArrayTypeId))
 			{
 				SetError(input, "Cannot index non-array expression.");
 				return 0;
