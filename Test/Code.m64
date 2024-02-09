@@ -30,7 +30,7 @@ struct float2
 
 struct Quad2
 {
-	float2 p[4];
+	p: [4]float;
 }
 
 operator float2(x, y: float) float2

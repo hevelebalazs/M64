@@ -120,6 +120,7 @@ typedef enum tdef BaseVarTypeId
 {
 	BoolBaseTypeId,
 	Int32BaseTypeId,
+	Float32BaseTypeId,
 	UInt32BaseTypeId
 } BaseVarTypeId;
 
@@ -211,9 +212,10 @@ typedef struct tdef ParseInput
 	
 	struct FuncDefinition *func_definition;
 	
-	VarType *int_type;
-	VarType *uint_type;
 	VarType *bool_type;
+	VarType *int_type;
+	VarType *float_type;
+	VarType *uint_type;
 } ParseInput;
 
 static char *
@@ -1677,6 +1679,10 @@ func ReadVarType(ParseInput *input)
 		{
 			type = input->uint_type;
 		}
+		else if(TokenEquals(input->last_token, "float"))
+		{
+			type = input->float_type;
+		}
 		else
 		{			
 			StructDefinition *def = GetStructDefinition(input, input->last_token);
@@ -2324,20 +2330,25 @@ int main(int arg_n, char **arg_v)
 	input.var_stack.vars = ArenaPushArray(&input.arena, VarStackMaxSize, Var);
 	input.var_stack.size = 0;
 	
+	BaseType *bool_base = ArenaPushType(&input.arena, BaseType);
+	bool_base->type.id = BaseTypeId;
+	bool_base->base_id = BoolBaseTypeId;
+	input.bool_type = (VarType *)bool_base;
+
 	BaseType *int_base = ArenaPushType(&input.arena, BaseType);
 	int_base->type.id = BaseTypeId;
 	int_base->base_id = Int32BaseTypeId;
 	input.int_type = (VarType *)int_base;
 	
+	BaseType *float_base = ArenaPushType(&input.arena, BaseType);
+	float_base->type.id = BaseTypeId;
+	float_base->base_id = Float32BaseTypeId;
+	input.float_type = (VarType *)float_base;
+	
 	BaseType *uint_base = ArenaPushType(&input.arena, BaseType);
 	uint_base->type.id = BaseTypeId;
 	uint_base->base_id = UInt32BaseTypeId;
 	input.uint_type = (VarType *)uint_base;
-	
-	BaseType *bool_base = ArenaPushType(&input.arena, BaseType);
-	bool_base->type.id = BaseTypeId;
-	bool_base->base_id = BoolBaseTypeId;
-	input.bool_type = (VarType *)bool_base;
 	
 	ReadCodeLines(&input);
 	
