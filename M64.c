@@ -100,6 +100,7 @@ typedef struct tdef Token
 typedef enum tdef VarTypeId
 {
 	NoTypeId,
+	ArrayTypeId,
 	BaseTypeId,
 	PointerTypeId,
 	StructTypeId
@@ -115,6 +116,16 @@ typedef struct tdef Var
 	VarType *type;
 	Token name;
 } Var;
+
+struct decl Expression;
+
+typedef struct tdef ArrayType
+{
+	VarType type;
+	
+	struct Expression *size;
+	VarType *element_type;
+} ArrayType;
 
 typedef enum tdef BaseVarTypeId
 {
@@ -1619,6 +1630,16 @@ func ReadCCodeDefinition(ParseInput *input)
 	return def;
 }
 
+static ArrayType *
+func PushArrayType(MemoryArena *arena, Expression *size, VarType *element_type)
+{
+	ArrayType *type = ArenaPushType(arena, ArrayType);
+	type->type.id = ArrayTypeId;
+	type->size = size;
+	type->element_type = element_type;
+	return type;
+}
+
 static PointerType *
 func PushPointerType(MemoryArena *arena, VarType *pointed_type)
 {
@@ -1668,6 +1689,36 @@ func ReadVarType(ParseInput *input)
 		}
 		
 		type = (VarType *)PushPointerType(&input->arena, pointed_type);
+	}
+	else if(ReadTokenId(input, OpenBracketsTokenId))
+	{
+		Expression *size = ReadExpression(input);
+		if(!size)
+		{
+			SetError(input, "Expected array size expression.");
+			return 0;
+		}
+		
+		if(size->modifiable)
+		{
+			SetError(input, "Array size has to be a constant.");
+			return 0;
+		}
+		
+		if(!ReadTokenId(input, CloseBracketsTokenId))
+		{
+			SetError(input, "Expected ']' after array size.");
+			return 0;
+		}
+		
+		VarType *element_type = ReadVarType(input);
+		if(!element_type)
+		{
+			SetError(input, "Expected array element type.");
+			return 0;
+		}
+		
+		type = (VarType *)PushArrayType(&input->arena, size, element_type);
 	}
 	else if(ReadTokenId(input, NameTokenId))
 	{
