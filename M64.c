@@ -69,6 +69,7 @@ typedef enum tdef TokenId
 	ExternTokenId,
 	ForTokenId,
 	FuncTokenId,
+	GreaterThanTokenId,
 	IfTokenId,
 	IntegerConstantTokenId,
 	LessThanTokenId,
@@ -529,6 +530,12 @@ func ReadToken(ParseInput *input)
 			pos->at++;
 		}
 	}
+	else if(pos->at[0] == '>')
+	{
+		token.id = GreaterThanTokenId;
+		token.length = 1;
+		pos->at++;
+	}
 	else if(pos->at[0] == ',')
 	{
 		token.id = CommaTokenId;
@@ -825,6 +832,7 @@ typedef enum tdef ExpressionId
 	CastExpressionId,
 	DereferenceExpressionId,
 	IntegerConstantExpressionId,
+	GreaterThanExpressionId,
 	LessThanExpressionId,
 	LessThanEqualExpressionId,
 	MultiplyExpressionId,
@@ -928,6 +936,27 @@ func PushDereferenceExpression(MemoryArena *arena, Expression *pointer)
 	e->e.modifiable = true;
 	
 	e->pointer = pointer;
+	return e;
+}
+
+typedef struct tdef GreaterThanExpression
+{
+	Expression e;
+	
+	Expression *left;
+	Expression *right;
+} GreaterThanExpression;
+
+static GreaterThanExpression *
+func PushGreaterThanExpression(MemoryArena *arena, Expression *left, Expression *right, VarType *bool_type)
+{
+	GreaterThanExpression *e = ArenaPushType(arena, GreaterThanExpression);
+	e->e.id = GreaterThanExpressionId;
+	e->e.type = bool_type;
+	
+	e->left = left;
+	e->right = right;
+	e->e.modifiable = false;
 	return e;
 }
 
@@ -1356,6 +1385,22 @@ func ReadCompareLevelExpression(ParseInput *input)
 			}
 			
 			e = (Expression *)PushLessThanEqualExpression(&input->arena, e, right, input->bool_type);
+		}
+		else if(ReadTokenId(input, GreaterThanTokenId))
+		{
+			Expression *right = ReadSumLevelExpression(input);
+			if(!right)
+			{
+				SetError(input, "Expected expression after '>'.");
+				return 0;
+			}
+			if(!TypesEqual(e->type, right->type))
+			{
+				SetError(input, "Types do not match for '>'.");
+				return 0;
+			}
+			
+			e = (Expression *)PushGreaterThanExpression(&input->arena, e, right, input->bool_type);
 		}
 		else
 		{
