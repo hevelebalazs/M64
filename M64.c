@@ -287,14 +287,25 @@ static void
 func SetErrorToken(ParseInput *input, char *description, Token token)
 {
 	if(input->any_error)
+	{
 		return;
+	}
 	
 	printf("Error: %s\n", description);
 	printf("In line %i\n", token.row);
 	PrintTokenInLine(input, token);
-	printf("\n");
 	
 	input->any_error = true;
+}
+
+static void decl WriteErrorVarType(VarType *);
+
+static void
+func WriteErrorMessageVarType(char *message, VarType *type)
+{
+	printf("%s", message);
+	WriteErrorVarType(type);
+	printf("\n");
 }
 
 static void
@@ -1335,6 +1346,8 @@ func ReadSumLevelExpression(ParseInput *input)
 			if(!TypesEqual(left->type, right->type))
 			{
 				SetError(input, "Types do not match for '+'.");
+				WriteErrorMessageVarType("Left:  ", left->type);
+				WriteErrorMessageVarType("Right: ", right->type);
 				return 0;
 			}
 			
@@ -2429,6 +2442,75 @@ func ReadDefinitionList(ParseInput *input)
 	}
 
 	return first_elem;
+}
+
+static void
+func WriteErrorVarType(VarType *type)
+{
+	switch(type->id)
+	{
+		case NoTypeId:
+		{
+			printf("No type");
+			break;
+		}
+		case ArrayTypeId:
+		{
+			ArrayType *t = (ArrayType *)type;
+			printf("[]");
+			WriteErrorVarType(t->element_type);
+			break;
+		}
+		case BaseTypeId:
+		{
+			BaseType *t = (BaseType *)type;
+			switch(t->base_id)
+			{
+				case BoolBaseTypeId:
+				{
+					printf("bool");
+					break;
+				}
+				case Int32BaseTypeId:
+				{
+					printf("int");
+					break;
+				}
+				case Float32BaseTypeId:
+				{
+					printf("float");
+					break;
+				}
+				case UInt32BaseTypeId:
+				{
+					printf("uint");
+					break;
+				}
+				default:
+				{
+					printf("unknown_base_type_%i", (int)t->base_id);
+					break;
+				}
+			}
+			break;
+		}
+		case PointerTypeId:
+		{
+			PointerType *t = (PointerType *)type;
+			printf("@");
+			WriteErrorVarType(t->pointed_type);
+			break;
+		}
+		case StructTypeId:
+		{
+			StructType *t = (StructType *)type;
+			printf("struct %.*s", t->def->name);
+		}
+		default:
+		{
+			printf("unknown_type_%i", (int)type->id);
+		}
+	}
 }
 
 #include "WriteC.h"
