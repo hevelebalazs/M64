@@ -223,6 +223,7 @@ typedef struct tdef ParseInput
 	struct StructDefinition *first_struct_definition;
 	
 	struct FuncDefinition *func_definition;
+	struct FuncDefinition *first_func_definition;
 	
 	VarType *bool_type;
 	VarType *int_type;
@@ -842,6 +843,7 @@ typedef enum tdef ExpressionId
 	ArrayIndexExpressionId,
 	CastExpressionId,
 	DereferenceExpressionId,
+	FuncCallExpressionId,
 	IntegerConstantExpressionId,
 	GreaterThanExpressionId,
 	LessThanExpressionId,
@@ -971,6 +973,14 @@ func PushGreaterThanExpression(MemoryArena *arena, Expression *left, Expression 
 	return e;
 }
 
+typedef struct tdef FuncCallExpression
+{
+	Expression e;
+	
+	struct FuncDefinition *func_def;
+	struct FuncCallArgument *first_call_arg;
+} FuncCallExpression;
+
 typedef struct tdef IntegerConstantExpression
 {
 	Expression e;
@@ -1074,6 +1084,64 @@ typedef struct tdef Definition
 	DefinitionId id;
 } Definition;
 
+typedef struct tdef FuncParam
+{
+	struct FuncParam *next;
+	Token name;
+	VarType *type;
+} FuncParam;
+
+typedef struct tdef FuncHeader
+{
+	Token name;
+	
+	FuncParam *first_param;
+	VarType *return_type;
+} FuncHeader;
+
+typedef struct tdef FuncDefinition
+{
+	Definition def;
+	
+	struct FuncDefinition *next;
+	
+	FuncHeader header;
+	struct BlockInstruction *body;
+} FuncDefinition;
+
+static FuncDefinition *
+func GetFuncDefinition(ParseInput *input, Token name)
+{
+	for(FuncDefinition *f = input->first_func_definition; f; f = f->next)
+	{
+		if(TokensEqual(f->header.name, name))
+		{
+			return f;
+		}
+	}
+	
+	return 0;
+}
+
+typedef struct tdef FuncCallArgument
+{
+	struct FuncCallArgument *next;
+	
+	Expression *arg;
+} FuncCallArgument;
+
+static FuncCallExpression *
+func PushFuncCallExpression(MemoryArena *arena, FuncDefinition *func_def, FuncCallArgument *first_call_arg)
+{
+	FuncCallExpression *e = ArenaPushType(arena, FuncCallExpression);
+	e->e.id = FuncCallExpressionId;
+	e->e.type = func_def->header.return_type;
+	
+	e->func_def = func_def;
+	e->first_call_arg = first_call_arg;
+	return e;
+}
+
 typedef struct tdef StructVar
 {
 	Token name;
@@ -1140,6 +1208,15 @@ func GetStructVar(StructDefinition *def, Token name)
 static Expression *decl ReadExpression(ParseInput *);
 static VarType *decl ReadVarType(ParseInput *);
 
+static FuncCallArgument *
+func PushFuncCallArgument(MemoryArena *arena, Expression *expression)
+{
+	FuncCallArgument *arg = ArenaPushType(arena, FuncCallArgument);
+	arg->next = 0;
+	arg->arg = expression;
+	return arg;
+}
+
 static Expression *
 func ReadNumberLevelExpression(ParseInput *input)
 {
@@ -1168,15 +1245,87 @@ func ReadNumberLevelExpression(ParseInput *input)
 	}
 	else if(ReadTokenId(input, NameTokenId))
 	{
+		bool ok = false;
 		Token name = input->last_token;
-		if(VarExists(&input->var_stack, name))
+		
+		if(!ok)
 		{
 			Var *var = GetVar(&input->var_stack, name);
-			e = (Expression *)PushVarExpression(&input->arena, *var);
+			if(var)
+			{
+				e = (Expression *)PushVarExpression(&input->arena, *var);
+				ok = true;
+			}
 		}
-		else
+		
+		if(!ok)
 		{
-			SetErrorToken(input, "Unexpected token ", name);
+			FuncDefinition *f = GetFuncDefinition(input, name);
+			if(f)
+			{
+				if(!ReadTokenId(input, OpenParenTokenId))
+				{
+					SetError(input, "Expected '(' for function call!");
+					return 0;
+				}
+				
+				FuncCallArgument *first_call_arg = 0;
+				FuncCallArgument *last_call_arg = 0;
+				
+				FuncHeader *header = &f->header;
+				for(FuncParam *param = header->first_param; param; param = param->next)
+				{
+					if(last_call_arg != 0)
+					{
+						if(!ReadTokenId(input, CommaTokenId))
+						{
+							SetError(input, "Expected ',' between function call arguments.");
+							return 0;
+						}
+					}
+					
+					Expression *arg = ReadExpression(input);
+					if(!arg)
+					{
+						SetError(input, "Expected function call argument.");
+						return 0;
+					}
+					
+					if(!TypesEqual(arg->type, param->type))
+					{
+						SetError(input, "Types do not match for function call.");
+						WriteErrorMessageVarType("Need: ", param->type);
+						WriteErrorMessageVarType("Got:  ", arg->type);
+						return 0;
+					}
+					
+					FuncCallArgument *call_arg = PushFuncCallArgument(&input->arena, arg);
+					if(!first_call_arg)
+					{
+						first_call_arg = call_arg;
+						last_call_arg = call_arg;
+					}
+					else
+					{
+						last_call_arg->next = call_arg;
+						last_call_arg = call_arg;
+					}
+				}
+				
+				if(!ReadTokenId(input, CloseParenTokenId))
+				{
+					SetError(input, "Expected ')' for function call!");
+					return 0;
+				}
+				
+				e = (Expression *)PushFuncCallExpression(&input->arena, f, first_call_arg);
+				ok = true;
+			}
+		}
+		
+		if(!ok)
+		{
+			SetError(input, "Unexpected token!");
 			return 0;
 		}
 	}
@@ -2070,29 +2219,6 @@ func ReadBlock(ParseInput *input)
 	return block;
 }
 
-typedef struct tdef FuncParam
-{
-	struct FuncParam *next;
-	Token name;
-	VarType *type;
-} FuncParam;
-
-typedef struct tdef FuncHeader
-{
-	Token name;
-	
-	FuncParam *first_param;
-	VarType *return_type;
-} FuncHeader;
-
-typedef struct tdef FuncDefinition
-{
-	Definition def;
-	
-	FuncHeader header;
-	BlockInstruction *body;
-} FuncDefinition;
-
 static ReturnInstruction *
 func ReadReturnInstruction(ParseInput *input)
 {
@@ -2239,6 +2365,9 @@ func ReadFuncDefinition(ParseInput *input)
 	def->body = body;
 	
 	input->func_definition = prev_func_definition;
+	
+	def->next = input->first_func_definition;
+	input->first_func_definition = def;
 	
 	SetStackState(input, stack_state);
 	
