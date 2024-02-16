@@ -67,6 +67,7 @@ typedef enum tdef TokenId
 	EndOfFileTokenId,
 	EqualsTokenId,
 	ExternTokenId,
+	FloatConstantTokenId,
 	ForTokenId,
 	FuncTokenId,
 	GreaterThanTokenId,
@@ -275,12 +276,18 @@ func PrintTokenInLine(ParseInput *input, Token token)
 	for(size_t i = 0; i < token.col - 1; i++)
 	{
 		if(line.string[i] == '\t')
+		{
 			printf("\t");
+		}
 		else
+		{
 			printf(" ");
+		}
 	}
 	for(int i = 0; i < token.length; i++)
-		printf("^");
+	{
+		printf("^");		
+	}
 
 	printf("\n");
 }
@@ -652,6 +659,8 @@ func ReadToken(ParseInput *input)
 					break;
 				}
 			}
+			
+			token.id = IntegerConstantTokenId;
 		}
 		else
 		{
@@ -667,9 +676,32 @@ func ReadToken(ParseInput *input)
 					break;
 				}
 			}
+			
+			if(pos->at[0] == '.')
+			{
+				pos->at++;
+				token.length++;
+				while(1)
+				{
+					if(IsDigit(pos->at[0]))
+					{
+						token.length++;
+						pos->at++;
+					
+					}
+					else
+					{
+						break;
+					}
+				}
+				
+				token.id = FloatConstantTokenId;
+			}
+			else
+			{
+				token.id = IntegerConstantTokenId;
+			}
 		}
-		
-		token.id = IntegerConstantTokenId;
 	}
 	else if(IsAlpha(pos->at[0]))
 	{
@@ -850,6 +882,7 @@ typedef enum tdef ExpressionId
 	ArrayIndexExpressionId,
 	CastExpressionId,
 	DereferenceExpressionId,
+	FloatConstantExpressionId,
 	FuncCallExpressionId,
 	IntegerConstantExpressionId,
 	GreaterThanExpressionId,
@@ -979,6 +1012,24 @@ func PushGreaterThanExpression(MemoryArena *arena, Expression *left, Expression 
 	e->left = left;
 	e->right = right;
 	e->e.modifiable = false;
+	return e;
+}
+
+typedef struct tdef FloatConstantExpression
+{
+	Expression e;
+	
+	Token token;
+} FloatConstantExpression;
+
+static FloatConstantExpression *
+func PushFloatConstantExpression(MemoryArena *arena, Token token, VarType *float_type)
+{
+	FloatConstantExpression *e = ArenaPushType(arena, FloatConstantExpression);
+	e->e.id = FloatConstantExpressionId;
+	e->e.type = float_type;
+	
+	e->token = token;
 	return e;
 }
 
@@ -1290,6 +1341,10 @@ func ReadNumberLevelExpression(ParseInput *input)
 	else if(ReadTokenId(input, IntegerConstantTokenId))
 	{
 		e = (Expression *)PushIntegerConstantExpression(&input->arena, input->last_token, input->int_type);
+	}
+	else if(ReadTokenId(input, FloatConstantTokenId))
+	{
+		e = (Expression *)PushFloatConstantExpression(&input->arena, input->last_token, input->float_type);
 	}
 	else if(ReadTokenId(input, OpenParenTokenId))
 	{

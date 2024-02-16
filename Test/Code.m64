@@ -47,7 +47,7 @@ func TurnsRight(p0, p1, p2: float2) bool
 	d1 := p2 - p1;
 	
 	det := (d0.x * d1.y) - (d0.y * d1.x);
-	turns_right := (det < 0.0f);
+	turns_right := (det < 0.0);
 	return turns_right;
 }
 
