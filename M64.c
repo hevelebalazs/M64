@@ -74,6 +74,7 @@ typedef enum tdef TokenId
 	IntegerConstantTokenId,
 	LessThanTokenId,
 	LessThanEqualTokenId,
+	MinusTokenId,
 	NameTokenId,
 	OpenBracesTokenId,
 	OpenBracketsTokenId,
@@ -608,6 +609,12 @@ func ReadToken(ParseInput *input)
 			token.length = 1;
 		}
 	}
+	else if(pos->at[0] == '-')
+	{
+		token.id = MinusTokenId;
+		token.length = 1;
+		pos->at++;
+	}
 	else if(pos->at[0] == '*')
 	{
 		token.id = StarTokenId;
@@ -850,6 +857,7 @@ typedef enum tdef ExpressionId
 	LessThanEqualExpressionId,
 	MultiplyExpressionId,
 	StructVarExpressionId,
+	SubtractExpressionId,
 	VarExpressionId
 } ExpressionId;
 
@@ -1070,6 +1078,27 @@ typedef struct tdef StructVarExpression
 	Expression *base;
 	Token var_name;
 } StructVarExpression;
+
+typedef struct tdef SubtractExpression
+{
+	Expression e;
+	
+	Expression *left;
+	Expression *right;
+} SubtractExpression;
+
+static SubtractExpression *
+func PushSubtractExpression(MemoryArena *arena, Expression *left, Expression *right)
+{
+	SubtractExpression *e = ArenaPushType(arena, SubtractExpression);
+	e->e.id = SubtractExpressionId;
+	e->e.type = left->type;
+	
+	e->left = left;
+	e->right = right;
+	e->e.modifiable = false;
+	return e;
+}
 
 typedef enum tdef DefinitionId
 {
@@ -1501,6 +1530,25 @@ func ReadSumLevelExpression(ParseInput *input)
 			}
 			
 			e = (Expression *)PushAddExpression(&input->arena, left, right);
+		}
+		else if(ReadTokenId(input, MinusTokenId))
+		{
+			Expression *left = e;
+			Expression *right = ReadProductLevelExpression(input);
+			if(!right)
+			{
+				SetError(input, "Expected expression after '-'.");
+				return 0;
+			}
+			if(!TypesEqual(left->type, right->type))
+			{
+				SetError(input, "Types do not match for '-'.");
+				WriteErrorMessageVarType("Left:  ", left->type);
+				WriteErrorMessageVarType("Right: ", right->type);
+				return 0;
+			}
+			
+			e = (Expression *)PushSubtractExpression(&input->arena, left, right);
 		}
 		else
 		{
