@@ -1946,6 +1946,10 @@ func ReadVarType(ParseInput *input)
 		{
 			type = input->float_type;
 		}
+		else if(TokenEquals(input->last_token, "bool"))
+		{
+			type = input->bool_type;
+		}
 		else
 		{			
 			StructDefinition *def = GetStructDefinition(input, input->last_token);
