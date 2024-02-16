@@ -1084,6 +1084,7 @@ func PushParenExpression(MemoryArena *arena, Expression *in)
 {
 	ParenExpression *e = ArenaPushType(arena, ParenExpression);
 	e->e.id = ParenExpressionId;
+	e->e.type = in->type;
 	
 	e->in = in;
 	return e;
