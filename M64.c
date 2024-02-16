@@ -67,6 +67,7 @@ typedef enum tdef TokenId
 	EndOfFileTokenId,
 	EqualsTokenId,
 	ExternTokenId,
+	FalseTokenId,
 	FloatConstantTokenId,
 	ForTokenId,
 	FuncTokenId,
@@ -88,7 +89,8 @@ typedef enum tdef TokenId
 	SemiColonTokenId,
 	StarTokenId,
 	StructTokenId,
-	ToTokenId
+	ToTokenId,
+	TrueTokenId
 } TokenId;
 
 typedef struct tdef Token
@@ -712,21 +714,45 @@ func ReadToken(ParseInput *input)
 		}
 		
 		if(TokenEquals(token, "extern"))
+		{
 			token.id = ExternTokenId;
+		}
+		else if(TokenEquals(token, "false"))
+		{
+			token.id = FalseTokenId;;
+		}
 		else if(TokenEquals(token, "for"))
+		{
 			token.id = ForTokenId;
+		}
 		else if(TokenEquals(token, "func"))
+		{
 			token.id = FuncTokenId;
+		}
 		else if(TokenEquals(token, "if"))
+		{
 			token.id = IfTokenId;
+		}
 		else if(TokenEquals(token, "return"))
+		{
 			token.id = ReturnTokenId;
+		}
 		else if(TokenEquals(token, "struct"))
+		{
 			token.id = StructTokenId;
+		}
 		else if(TokenEquals(token, "to"))
+		{
 			token.id = ToTokenId;
+		}
+		else if(TokenEquals(token, "true"))
+		{
+			token.id = TrueTokenId;
+		}
 		else
+		{
 			token.id = NameTokenId;
+		}
 	}
 	else
 	{
@@ -880,6 +906,7 @@ typedef enum tdef ExpressionId
 {
 	AddExpressionId,
 	ArrayIndexExpressionId,
+	BoolConstantExpressionId,
 	CastExpressionId,
 	DereferenceExpressionId,
 	FloatConstantExpressionId,
@@ -951,6 +978,24 @@ func PushArrayIndexExpression(MemoryArena *arena, Expression *array, Expression 
 	e->array = array;
 	e->index = index;
 	e->e.modifiable = true;
+	return e;
+}
+
+typedef struct tdef BoolConstantExpression
+{
+	Expression e;
+	
+	Token token;
+} BoolConstantExpression;
+
+static BoolConstantExpression *
+func PushBoolConstantExpression(MemoryArena *arena, Token token, VarType *bool_type)
+{
+	BoolConstantExpression *e = ArenaPushType(arena, BoolConstantExpression);
+	e->e.id = BoolConstantExpressionId;
+	e->e.type = bool_type;
+	
+	e->token = token;
 	return e;
 }
 
@@ -1345,6 +1390,10 @@ func ReadNumberLevelExpression(ParseInput *input)
 	else if(ReadTokenId(input, FloatConstantTokenId))
 	{
 		e = (Expression *)PushFloatConstantExpression(&input->arena, input->last_token, input->float_type);
+	}
+	else if(ReadTokenId(input, FalseTokenId) || ReadTokenId(input, TrueTokenId))
+	{
+		e = (Expression *)PushBoolConstantExpression(&input->arena, input->last_token, input->bool_type);
 	}
 	else if(ReadTokenId(input, OpenParenTokenId))
 	{
