@@ -40,11 +40,22 @@ func WriteToken(Output *output, Token token)
 	}
 }
 
+static void decl WriteExpression(Output *, Expression *);
+
 static void
 func WriteType(Output *output, VarType *type)
 {
 	switch(type->id)
 	{
+		case ArrayTypeId:
+		{
+			ArrayType *t = (ArrayType *)type;
+			WriteType(output, t->element_type);
+			WriteString(output, "[");
+			WriteExpression(output, t->size);
+			WriteString(output, "]");
+			break;
+		}
 		case BaseTypeId:
 		{
 			BaseType *t = (BaseType *)type;
@@ -58,6 +69,11 @@ func WriteType(Output *output, VarType *type)
 				case Int32BaseTypeId:
 				{
 					WriteString(output, "int");
+					break;
+				}
+				case Float32BaseTypeId:
+				{
+					WriteString(output, "float");
 					break;
 				}
 				case UInt32BaseTypeId:
@@ -160,6 +176,13 @@ func WriteExpression(Output *output, Expression *expression)
 			WriteString(output, "]");
 			break;
 		}
+		case BoolConstantExpressionId:
+		{
+			BoolConstantExpression *e = (BoolConstantExpression *)expression;
+			
+			
+			break;
+		}
 		case CastExpressionId:
 		{
 			CastExpression *e = (CastExpression *)expression;
@@ -176,10 +199,42 @@ func WriteExpression(Output *output, Expression *expression)
 			WriteExpression(output, e->pointer);
 			break;
 		}
+		case FloatConstantExpressionId:
+		{
+			FloatConstantExpression *e = (FloatConstantExpression *)expression;
+			WriteToken(output, e->token);
+			break;
+		}
+		case FuncCallExpressionId:
+		{
+			FuncCallExpression *e = (FuncCallExpression *)expression;
+			FuncDefinition *def = e->func_def;
+			
+			WriteToken(output, def->header.name);
+			WriteString(output, "(");
+			for(FuncCallArgument *arg = e->first_call_arg; arg; arg = arg->next)
+			{
+				WriteExpression(output, arg->arg);
+				if(arg->next)
+				{
+					WriteString(output, ", ");
+				}
+			}
+			WriteString(output, ")");
+			break;
+		}
 		case IntegerConstantExpressionId:
 		{
 			IntegerConstantExpression *e = (IntegerConstantExpression *)expression;
 			WriteToken(output, e->token);
+			break;
+		}
+		case GreaterThanExpressionId:
+		{
+			GreaterThanExpression *e = (GreaterThanExpression *)expression;
+			WriteExpression(output, e->left);
+			WriteString(output, " > ");
+			WriteExpression(output, e->right);
 			break;
 		}
 		case LessThanExpressionId:
@@ -206,6 +261,14 @@ func WriteExpression(Output *output, Expression *expression)
 			WriteExpression(output, e->right);
 			break;
 		}
+		case ParenExpressionId:
+		{
+			ParenExpression *e = (ParenExpression *)expression;
+			WriteString(output, "(");
+			WriteExpression(output, e->in);
+			WriteString(output, ")");
+			break;
+		}
 		case StructVarExpressionId:
 		{
 			StructVarExpression *e = (StructVarExpression *)expression;
@@ -224,6 +287,15 @@ func WriteExpression(Output *output, Expression *expression)
 			
 			break;
 		}
+		case SubtractExpressionId:
+		{
+			SubtractExpression *e = (SubtractExpression *)expression;
+			WriteExpression(output, e->left);
+			WriteString(output, " - ");
+			WriteExpression(output, e->right);
+			break;
+		}
+		
 		case VarExpressionId:
 		{
 			VarExpression *e = (VarExpression *)expression;
@@ -246,6 +318,14 @@ func WriteInstruction(Output *output, Instruction *instruction)
 {
 	switch(instruction->id)
 	{
+		case AndEqualsInstructionId:
+		{
+			AndEqualsInstruction *i = (AndEqualsInstruction *)instruction;
+			WriteExpression(output, i->left);
+			WriteString(output, " &= ");
+			WriteExpression(output, i->right);
+			break;
+		}
 		case AssignInstructionId:
 		{
 			AssignInstruction *i = (AssignInstruction *)instruction;
@@ -273,6 +353,12 @@ func WriteInstruction(Output *output, Instruction *instruction)
 			{
 				WriteString(output, "{}");
 			}
+			break;
+		}
+		case FuncCallInstructionId:
+		{
+			FuncCallInstruction *i = (FuncCallInstruction *)instruction;
+			WriteExpression(output, (Expression *)i->e);
 			break;
 		}
 		case IfInstructionId:
