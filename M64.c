@@ -856,6 +856,7 @@ typedef enum tdef ExpressionId
 	LessThanExpressionId,
 	LessThanEqualExpressionId,
 	MultiplyExpressionId,
+	ParenExpressionId,
 	StructVarExpressionId,
 	SubtractExpressionId,
 	VarExpressionId
@@ -1071,6 +1072,23 @@ func PushMultiplyExpression(MemoryArena *arena, Expression *left, Expression *ri
 	return e;
 }
 
+typedef struct tdef ParenExpression
+{
+	Expression e;
+	
+	Expression *in;
+} ParenExpression;
+
+static ParenExpression *
+func PushParenExpression(MemoryArena *arena, Expression *in)
+{
+	ParenExpression *e = ArenaPushType(arena, ParenExpression);
+	e->e.id = ParenExpressionId;
+	
+	e->in = in;
+	return e;
+}
+
 typedef struct tdef StructVarExpression
 {
 	Expression e;
@@ -1271,6 +1289,23 @@ func ReadNumberLevelExpression(ParseInput *input)
 	else if(ReadTokenId(input, IntegerConstantTokenId))
 	{
 		e = (Expression *)PushIntegerConstantExpression(&input->arena, input->last_token, input->int_type);
+	}
+	else if(ReadTokenId(input, OpenParenTokenId))
+	{
+		Expression *in = ReadExpression(input);
+		if(!in)
+		{
+			SetError(input, "Expected expression after '('.");
+			return 0;
+		}
+		
+		if(!ReadTokenId(input, CloseParenTokenId))
+		{
+			SetError(input, "Expected ')'.");
+			return 0;
+		}
+		
+		e = (Expression *)PushParenExpression(&input->arena, in);
 	}
 	else if(ReadTokenId(input, NameTokenId))
 	{
