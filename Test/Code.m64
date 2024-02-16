@@ -95,7 +95,7 @@ func DrawQuad2(bitmap: @Bitmap, quad: Quad2, color: uint)
 		for col := int::min_x; col < int::max_x + 1; col++
 		{
 			p := Float2XY(float::col, float::row);
-			if IsPointInQuad(p, quad)
+			if IsPointInQuad2(p, quad)
 			{
 				SetPixelColor(bitmap, row, col, color);
 			}
