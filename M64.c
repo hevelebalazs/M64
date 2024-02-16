@@ -1800,6 +1800,7 @@ typedef enum tdef InstructionId
 	AssignInstructionId,
 	BlockInstructionId,
 	CreateVariableInstructionId,
+	FuncCallInstructionId,
 	IfInstructionId,
 	IncrementInstructionId,
 	ForInstructionId,
@@ -1996,6 +1997,13 @@ func ReadForInstruction(ParseInput *input)
 	SetStackState(input, stack_state);
 	return i;
 }
+
+typedef struct tdef FuncCallInstruction
+{
+	Instruction i;
+	
+	FuncCallExpression *e;
+} FuncCallInstruction;
 
 typedef struct tdef ReturnInstruction
 {
@@ -2214,7 +2222,9 @@ func NeedsSemicolon(InstructionId id)
 		case BlockInstructionId: 
 		case IfInstructionId:
 		case ForInstructionId:
+		{
 			return false;
+		}
 	}
 	
 	return true;
@@ -2314,7 +2324,15 @@ func ReadInstruction(ParseInput *input)
 			return 0;	
 		}
 		
-		if(ReadTokenId(input, EqualsTokenId))
+		if(expression->id == FuncCallExpressionId)
+		{
+			FuncCallInstruction *i = ArenaPushType(&input->arena, FuncCallInstruction);
+			i->i.id = FuncCallInstructionId;
+			
+			i->e = (FuncCallExpression *)expression;
+			instruction = (Instruction *)i;
+		}
+		else if(ReadTokenId(input, EqualsTokenId))
 		{
 			Expression *right = ReadExpression(input);
 			if(!right)
