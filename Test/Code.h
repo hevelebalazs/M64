@@ -17,10 +17,12 @@ void FillWithColor(Bitmap *bitmap, unsigned int color)
         }
     }
 }
+
 void SetPixelColor(Bitmap *bitmap, int row, int col, unsigned int color)
 {
     bitmap->memory[row * bitmap->width + col] = color;
 }
+
 typedef struct float2
 {
     float x;
@@ -39,6 +41,7 @@ float2 Float2XY(float x, float y)
     result.y = y;
     return result;
 }
+
 int TurnsRight(float2 p0, float2 p1, float2 p2)
 {
     float2 d0 = p1 - p0;
@@ -47,6 +50,7 @@ int TurnsRight(float2 p0, float2 p1, float2 p2)
     int turns_right = (det < 0.0);
     return turns_right;
 }
+
 int IsPointInQuad2(float2 p, Quad2 q)
 {
     int is_inside = ;
@@ -56,6 +60,7 @@ int IsPointInQuad2(float2 p, Quad2 q)
     is_inside &= TurnsRight(q.p[3], q.p[0], p);
     return is_inside;
 }
+
 void DrawQuad2(Bitmap *bitmap, Quad2 quad, unsigned int color)
 {
     float min_x = quad.p[0].x;
@@ -95,6 +100,7 @@ void DrawQuad2(Bitmap *bitmap, Quad2 quad, unsigned int color)
         }
     }
 }
+
 void DrawRectMinMax(Bitmap *bitmap, int min_row, int min_col, int max_row, int max_col, unsigned int color)
 {
     for(int row = min_row; row <= max_row; row++)

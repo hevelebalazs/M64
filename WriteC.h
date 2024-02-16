@@ -500,6 +500,7 @@ func WriteDefinitionList(Output *output, DefinitionList *def_list)
 				WriteString(output, "\n");
 
 				WriteBlock(output, def->body);
+				WriteString(output, "\n");
 				
 				break;
 			}
