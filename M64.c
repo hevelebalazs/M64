@@ -53,6 +53,7 @@ typedef enum tdef TokenId
 {
 	UnknownTokenId,
 	
+	AndEqualsTokenId,
 	AtTokenId,
 	CCodeTokenId,
 	CloseBracesTokenId,
@@ -629,6 +630,12 @@ func ReadToken(ParseInput *input)
 		token.id = StarTokenId;
 		pos->at++;
 		token.length = 1;
+	}
+	else if(pos->at[0] == '&' && pos->at[1] == '=')
+	{
+		token.id = AndEqualsTokenId;
+		pos->at += 2;
+		token.length = 2;
 	}
 	else if(pos->at[0] == '#')
 	{
@@ -1789,6 +1796,7 @@ func SetStackState(ParseInput *input, StackState state)
 
 typedef enum tdef InstructionId
 {
+	AndEqualsInstructionId,
 	AssignInstructionId,
 	BlockInstructionId,
 	CreateVariableInstructionId,
@@ -1803,6 +1811,14 @@ typedef struct tdef Instruction
 	InstructionId id;
 	struct Instruction *next;
 } Instruction;
+
+typedef struct tdef AndEqualsInstruction
+{
+	Instruction i;
+	
+	Expression *left;
+	Expression *right;
+} AndEqualsInstruction;
 
 typedef struct tdef BlockInstruction
 {
@@ -2343,6 +2359,34 @@ func ReadInstruction(ParseInput *input)
 			i->i.id = IncrementInstructionId;
 			
 			i->value = expression;
+			instruction = (Instruction *)i;
+		}
+		else if(ReadTokenId(input, AndEqualsTokenId))
+		{
+			if(!expression->modifiable)
+			{
+				SetError(input, "Cannot apply '&=' to a non-modifiable expression.");
+				return 0;
+			}
+			
+			Expression *right = ReadExpression(input);
+			if(!right)
+			{
+				SetError(input, "Expected expression after '&='.");
+				return 0;
+			}
+			
+			if(!TypesEqual(expression->type, right->type))
+			{
+				SetError(input, "Unmatching types for '&='.");
+				return 0;
+			}
+			
+			AndEqualsInstruction *i = ArenaPushType(&input->arena, AndEqualsInstruction);
+			i->i.id = AndEqualsInstructionId;
+			
+			i->left = expression;
+			i->right = right;
 			instruction = (Instruction *)i;
 		}
 		else
