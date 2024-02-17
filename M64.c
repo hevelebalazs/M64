@@ -334,14 +334,20 @@ static bool
 func TokensEqual(Token token1, Token token2)
 {
 	if(token1.id != token2.id)
+	{
 		return false;
+	}
 	if(token1.length != token2.length)
+	{
 		return false;
+	}
 	
 	for(size_t i = 0; i < token1.length; i++)
 	{
 		if(token1.text[i] != token2.text[i])
+		{
 			return false;
+		}
 	}
 	
 	return true;
@@ -931,6 +937,7 @@ typedef enum tdef ExpressionId
 	LessThanExpressionId,
 	LessThanEqualExpressionId,
 	MultiplyExpressionId,
+	OperatorCallExpressionId,
 	ParenExpressionId,
 	StructVarExpressionId,
 	SubtractExpressionId,
@@ -1183,6 +1190,17 @@ func PushMultiplyExpression(MemoryArena *arena, Expression *left, Expression *ri
 	return e;
 }
 
+typedef struct tdef OperatorCallExpression
+{
+	Expression e;
+	
+	struct OperatorDefinition *def;
+	Expression *left;
+	Expression *right;
+} OperatorCallExpression;
+
+static OperatorCallExpression *decl PushOperatorCallExpression(MemoryArena *, struct OperatorDefinition *, Expression *, Expression *);
+
 typedef struct tdef ParenExpression
 {
 	Expression e;
@@ -1308,7 +1326,7 @@ typedef struct tdef OperatorDefinition
 	
 	struct OperatorDefinition *next;
 	
-	Token op;
+	TokenId op;
 	Token name;
 	
 	Token left_name;
@@ -1321,6 +1339,33 @@ typedef struct tdef OperatorDefinition
 	
 	struct BlockInstruction *body;
 } OperatorDefinition;
+
+static OperatorDefinition *
+func GetOperatorDefinition(ParseInput *input, TokenId op, VarType *left_type, VarType *right_type)
+{
+	for(OperatorDefinition *def = input->first_operator_definition; def; def = def->next)
+	{
+		if(op == def->op && TypesEqual(left_type, def->left_type) && TypesEqual(right_type, def->right_type))
+		{
+			return def;
+		}
+	}
+	
+	return 0;
+}
+
+static OperatorCallExpression *
+func PushOperatorCallExpression(MemoryArena *arena, OperatorDefinition *op_def, Expression *left, Expression *right)
+{
+	OperatorCallExpression *e = ArenaPushType(arena, OperatorCallExpression);
+	e->e.id = OperatorCallExpressionId;
+	e->e.type = op_def->return_type;
+	
+	e->def = op_def;
+	e->left = left;
+	e->right = right;
+	return e;
+}
 
 typedef struct tdef StructVar
 {
@@ -1736,21 +1781,30 @@ func ReadSumLevelExpression(ParseInput *input)
 				SetError(input, "Expected expression after '-'.");
 				return 0;
 			}
-			if(!TypesEqual(left->type, right->type))
+			
+			OperatorDefinition *op_def = GetOperatorDefinition(input, MinusTokenId, left->type, right->type);
+			
+			if(op_def)
+			{
+				e = (Expression *)PushOperatorCallExpression(&input->arena, op_def, left, right);
+			}
+			else if(!TypesEqual(left->type, right->type))
 			{
 				SetError(input, "Types do not match for '-'.");
 				WriteErrorMessageVarType("Left:  ", left->type);
 				WriteErrorMessageVarType("Right: ", right->type);
 				return 0;
 			}
-			if(!CanSubtractType(left->type))
+			else if(!CanSubtractType(left->type))
 			{
 				SetError(input, "Cannot use '-' on type.");
 				WriteErrorMessageVarType("Type: ", left->type);
 				return 0;
 			}
-			
-			e = (Expression *)PushSubtractExpression(&input->arena, left, right);
+			else
+			{
+				e = (Expression *)PushSubtractExpression(&input->arena, left, right);
+			}
 		}
 		else
 		{
@@ -2709,7 +2763,7 @@ func ReadOperatorDefinition(ParseInput *input)
 		return 0;
 	}
 	
-	def->op = op;
+	def->op = op.id;
 	
 	Token name = ReadToken(input);
 	if(name.id != NameTokenId)
