@@ -1,6 +1,6 @@
 typedef struct Bitmap
 {
-    unsigned int * memory;
+    unsigned int *memory;
     int width;
     int height;
 } Bitmap;
@@ -31,7 +31,7 @@ typedef struct float2
 
 typedef struct Quad2
 {
-    float2[4] p;
+    float2 p[4];
 } Quad2;
 
 float2 Float2XY(float x, float y)

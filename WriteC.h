@@ -115,12 +115,32 @@ func WriteType(Output *output, VarType *type)
 static void
 func WriteTypeAndVar(Output *output, VarType *type, Token var_name)
 {
-	WriteType(output, type);
-	if(type->id != PointerTypeId)
+	if(type->id == PointerTypeId)
 	{
-		WriteString(output, " ");
+		PointerType *t = (PointerType *)type;
+		WriteType(output, t->pointed_type);
+		WriteString(output, " *");
+		WriteToken(output, var_name);
 	}
-	WriteToken(output, var_name);
+	else if(type->id == ArrayTypeId)
+	{
+		ArrayType *t = (ArrayType *)type;
+		WriteType(output, t->element_type);
+		WriteString(output, " ");
+		WriteToken(output, var_name);
+		WriteString(output, "[");
+		WriteExpression(output, t->size);
+		WriteString(output, "]");
+	}
+	else
+	{
+		WriteType(output, type);
+		if(type->id != PointerTypeId)
+		{
+			WriteString(output, " ");
+		}
+		WriteToken(output, var_name);
+	}
 }
 
 static void
@@ -458,9 +478,7 @@ func WriteStructDefinition(Output *output, StructDefinition *def)
 	for(StructVar *var = def->first_var; var; var = var->next)
 	{
 		WriteTabs(output);
-		WriteType(output, var->type);
-		WriteString(output, " ");
-		WriteToken(output, var->name);
+		WriteTypeAndVar(output, var->type, var->name);
 		WriteString(output, ";\n");
 	}
 	
