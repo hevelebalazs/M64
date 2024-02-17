@@ -41,7 +41,7 @@ func Float2XY(x, y: float) float2
 	return result;
 }
 
-func F2sub(p1, p2: float2) float2
+operator- F2sub(p1:float2, p2:float2) float2
 {
 	return Float2XY(p1.x - p2.x, p1.y - p2.y);
 }

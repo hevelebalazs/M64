@@ -83,6 +83,7 @@ typedef enum tdef TokenId
 	OpenBracketsTokenId,
 	OpenBracketsOpenBracketsTokenId,
 	OpenParenTokenId,
+	OperatorTokenId,
 	PlusPlusTokenId,
 	PlusTokenId,
 	PoundCCodeTokenId,
@@ -229,6 +230,9 @@ typedef struct tdef ParseInput
 	
 	struct FuncDefinition *func_definition;
 	struct FuncDefinition *first_func_definition;
+	
+	struct OperatorDefinition *operator_definition;
+	struct OperatorDefinition *first_operator_definition;
 	
 	VarType *bool_type;
 	VarType *int_type;
@@ -740,6 +744,10 @@ func ReadToken(ParseInput *input)
 		{
 			token.id = IfTokenId;
 		}
+		else if(TokenEquals(token, "operator"))
+		{
+			token.id = OperatorTokenId;
+		}
 		else if(TokenEquals(token, "return"))
 		{
 			token.id = ReturnTokenId;
@@ -1227,6 +1235,7 @@ typedef enum tdef DefinitionId
 	CCodeDefinitionId,
 	ExternFuncDefinitionId,
 	FuncDefinitionId,
+	OperatorDefinitionId,
 	StructDefinitionId
 } DefinitionId;
 
@@ -1292,6 +1301,26 @@ func PushFuncCallExpression(MemoryArena *arena, FuncDefinition *func_def, FuncCa
 	e->first_call_arg = first_call_arg;
 	return e;
 }
+
+typedef struct tdef OperatorDefinition
+{
+	Definition def;
+	
+	struct OperatorDefinition *next;
+	
+	Token op;
+	Token name;
+	
+	Token left_name;
+	VarType *left_type;
+	
+	Token right_name;
+	VarType *right_type;
+	
+	VarType *return_type;
+	
+	struct BlockInstruction *body;
+} OperatorDefinition;
 
 typedef struct tdef StructVar
 {
@@ -2506,20 +2535,30 @@ func ReadReturnInstruction(ParseInput *input)
 	
 	Expression *value = 0;
 	if(!PeekTokenId(input, SemiColonTokenId))
-		value = ReadExpression(input);
-	
-	if(!input->func_definition)
 	{
-		SetError(input, "Found 'return' outside of function definition!");
-		return 0;
+		value = ReadExpression(input);
 	}
-	else
+	
+	if(input->func_definition)
 	{
 		if(!TypesEqual(input->func_definition->header.return_type, value->type))
 		{
-			SetError(input, "Found 'return' with invalid type");
+			SetError(input, "Found 'return' with invalid type.");
 			return 0;
 		}
+	}
+	else if(input->operator_definition)
+	{
+		if(!TypesEqual(input->operator_definition->return_type, value->type))
+		{
+			SetError(input, "Found 'return' with invalid type.");
+			return 0;
+		}
+	}
+	else
+	{
+		SetError(input, "Found 'return' outside of function definition!");
+		return 0;
 	}
 	
 	ReturnInstruction *i = ArenaPushType(&input->arena, ReturnInstruction);
@@ -2648,6 +2687,140 @@ func ReadFuncDefinition(ParseInput *input)
 	
 	def->next = input->first_func_definition;
 	input->first_func_definition = def;
+	
+	SetStackState(input, stack_state);
+	
+	return def;
+}
+
+static OperatorDefinition *
+func ReadOperatorDefinition(ParseInput *input)
+{
+	StackState stack_state = GetStackState(input);
+	
+	OperatorDefinition *def = ArenaPushType(&input->arena, OperatorDefinition);
+	
+	ReadTokenId(input, OperatorTokenId);
+	
+	Token op = ReadToken(input);
+	if(op.id != MinusTokenId)
+	{
+		SetError(input, "Invalid operator.");
+		return 0;
+	}
+	
+	def->op = op;
+	
+	Token name = ReadToken(input);
+	if(name.id != NameTokenId)
+	{
+		SetError(input, "Invalid operator name!");
+		return 0;
+	}
+	
+	def->name = name;
+	
+	if(!ReadTokenId(input, OpenParenTokenId))
+	{
+		SetError(input, "Expected '(' for operator.");
+		return 0;
+	}
+	
+	Token left_name = ReadToken(input);
+	if(left_name.id != NameTokenId)
+	{
+		SetError(input, "Invalid left operand name.");
+		return 0;
+	}
+	
+	if(VarExists(&input->var_stack, left_name))
+	{
+		SetError(input, "Variable already exists.");
+		return 0;
+	}
+	
+	if(!ReadTokenId(input, ColonTokenId))
+	{
+		SetError(input, "Expected ':'.");
+		return 0;
+	}
+	
+	VarType *left_type = ReadVarType(input);
+	if(!left_type)
+	{
+		SetError(input, "Expected left operand type.");
+		return 0;
+	}
+	
+	Var left_var = {};
+	left_var.name = left_name;
+	left_var.type = left_type;
+	PushVar(&input->var_stack, left_var);
+	
+	def->left_name = left_name;
+	def->left_type = left_type;
+	
+	if(!ReadTokenId(input, CommaTokenId))
+	{
+		SetError(input, "Expected ',' after left operand.");
+		return 0;
+	}
+	
+	Token right_name = ReadToken(input);
+	if(right_name.id != NameTokenId)
+	{
+		SetError(input, "Invalid right operand name.");
+		return 0;
+	}
+	
+	if(VarExists(&input->var_stack, right_name))
+	{
+		SetError(input, "Variable already exists.");
+		return 0;
+	}
+	
+	if(!ReadTokenId(input, ColonTokenId))
+	{
+		SetError(input, "Expected ':'.");
+		return 0;
+	}
+	
+	VarType *right_type = ReadVarType(input);
+	if(!right_type)
+	{
+		SetError(input, "Expect right operand type.");
+		return 0;
+	}
+	
+	Var right_var = {};
+	right_var.name = right_name;
+	right_var.type = right_type;
+	PushVar(&input->var_stack, right_var);
+	
+	def->right_name = right_name;
+	def->right_type = right_type;
+	
+	if(!ReadTokenId(input, CloseParenTokenId))
+	{
+		SetError(input, "Expected ')' for operand.");
+		return 0;
+	}
+	
+	def->return_type = ReadVarType(input);
+	
+	input->operator_definition = def;
+	
+	BlockInstruction *body = ReadBlock(input);
+	if(!body)
+	{
+		SetError(input, "Operator doesn't have a body.");
+		return 0;
+	}
+	
+	def->body = body;
+	
+	def->next = input->first_operator_definition;
+	input->first_operator_definition = def;
 	
 	SetStackState(input, stack_state);
 	
@@ -2803,13 +2976,25 @@ func ReadDefinition(ParseInput *input)
 	Definition *def = 0;
 	Token token = PeekToken(input);
 	if(token.id == PoundCCodeTokenId)
+	{
 		def = (Definition *)ReadCCodeDefinition(input);
+	}
 	else if(token.id == FuncTokenId)
+	{
 		def = (Definition *)ReadFuncDefinition(input);
+	}
 	else if(token.id == ExternTokenId)
+	{
 		def = (Definition *)ReadExternFuncDefinition(input);
+	}
 	else if(token.id == StructTokenId)
+	{
 		def = (Definition *)ReadStructDefinition(input);
+	}
+	else if(token.id == OperatorTokenId)
+	{
+		def = (Definition *)ReadOperatorDefinition(input);
+	}
 	else
 	{
 		SetErrorToken(input, "Expected definition instead of ", token);
