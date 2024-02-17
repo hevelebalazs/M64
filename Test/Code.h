@@ -53,7 +53,7 @@ int TurnsRight(float2 p0, float2 p1, float2 p2)
 
 int IsPointInQuad2(float2 p, Quad2 q)
 {
-    int is_inside = ;
+    int is_inside = 1;
     is_inside &= TurnsRight(q.p[0], q.p[1], p);
     is_inside &= TurnsRight(q.p[1], q.p[2], p);
     is_inside &= TurnsRight(q.p[2], q.p[3], p);

@@ -199,7 +199,14 @@ func WriteExpression(Output *output, Expression *expression)
 		case BoolConstantExpressionId:
 		{
 			BoolConstantExpression *e = (BoolConstantExpression *)expression;
-			
+			if(e->token.id == TrueTokenId)
+			{
+				WriteString(output, "1");
+			}
+			else
+			{
+				WriteString(output, "0");
+			}
 			
 			break;
 		}
