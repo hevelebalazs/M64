@@ -57,7 +57,6 @@ typedef enum tdef TokenId
 	AtTokenId,
 	CloseBracesTokenId,
 	CloseBracketsTokenId,
-	CloseBracketsCloseBracketsTokenId,
 	CloseParenTokenId,
 	CommaTokenId,
 	ColonColonTokenId,
@@ -80,7 +79,6 @@ typedef enum tdef TokenId
 	NameTokenId,
 	OpenBracesTokenId,
 	OpenBracketsTokenId,
-	OpenBracketsOpenBracketsTokenId,
 	OpenParenTokenId,
 	OperatorTokenId,
 	PlusPlusTokenId,
@@ -506,33 +504,15 @@ func ReadToken(ParseInput *input)
 	}
 	else if(pos->at[0] == '[')
 	{
-		if(pos->at[1] == '[')
-		{
-			token.id = OpenBracketsOpenBracketsTokenId;
-			token.length = 2;
-			pos->at += 2;
-		}
-		else
-		{
-			token.id = OpenBracketsTokenId;
-			token.length = 1;
-			pos->at++;
-		}
+		token.id = OpenBracketsTokenId;
+		token.length = 1;
+		pos->at++;
 	}
 	else if(pos->at[0] == ']')
 	{
-		if(pos->at[1] == ']')
-		{
-			token.id = CloseBracketsCloseBracketsTokenId;
-			token.length = 2;
-			pos->at += 2;
-		}
-		else
-		{
-			token.id = CloseBracketsTokenId;
-			token.length = 1;
-			pos->at++;
-		}
+		token.id = CloseBracketsTokenId;
+		token.length = 1;
+		pos->at++;
 	}
 	else if(pos->at[0] == '(')
 	{
@@ -1563,23 +1543,6 @@ func ReadNumberLevelExpression(ParseInput *input)
 			return 0;
 		}
 	}
-	else if(ReadTokenId(input, OpenBracketsOpenBracketsTokenId))
-	{
-		Expression *p = ReadExpression(input);
-		if(p->type->id != PointerTypeId)
-		{
-			SetError(input, "Dereferencing non-pointer expression!");
-			return 0;
-		}
-		
-		e = (Expression *)PushDereferenceExpression(&input->arena, p);
-		
-		if(!ReadTokenId(input, CloseBracketsCloseBracketsTokenId))
-		{
-			SetError(input, "Expected ']]' for dereference expression.");
-			return 0;
-		}
-	}
 	else
 	{
 		SetError(input, "Unknown expression.");
@@ -1663,6 +1626,22 @@ func ReadNumberLevelExpression(ParseInput *input)
 			}
 			
 			e = (Expression *)PushStructVarExpression(&input->arena, e, var);
+		}
+		else if(ReadTokenId(input, AtTokenId))
+		{
+			if(!e || !e->type)
+			{
+				SetError(input, "Expected expression before '@'.");
+				return 0;
+			}
+			
+			if(e->type->id != PointerTypeId)
+			{
+				SetError(input, "Dereferencing non-pointer expression!");
+				return 0;
+			}
+			
+			e = (Expression *)PushDereferenceExpression(&input->arena, e);
 		}
 		else
 		{

@@ -12,7 +12,7 @@ func FillWithColor(bitmap: @Bitmap, color: uint)
 	{
 		for col := 0; col < bitmap.width; col++
 		{
-			[[pixel]] = color;
+			pixel@ = color;
 			pixel++;
 		}
 	}
