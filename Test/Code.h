@@ -47,7 +47,7 @@ int TurnsRight(float2 p0, float2 p1, float2 p2)
     float2 d0 = p1 - p0;
     float2 d1 = p2 - p1;
     float det = (d0.x * d1.y) - (d0.y * d1.x);
-    int turns_right = (det < 0.0);
+    int turns_right = (det < 0.0f);
     return turns_right;
 }
 

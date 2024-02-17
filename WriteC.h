@@ -230,6 +230,7 @@ func WriteExpression(Output *output, Expression *expression)
 		{
 			FloatConstantExpression *e = (FloatConstantExpression *)expression;
 			WriteToken(output, e->token);
+			WriteString(output, "f");
 			break;
 		}
 		case FuncCallExpressionId:
