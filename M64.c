@@ -1705,13 +1705,22 @@ func ReadProductLevelExpression(ParseInput *input)
 				SetError(input, "Expected expression after '*'.");
 				return 0;
 			}
-			if(!TypesEqual(left->type, right->type))
+			
+			OperatorDefinition *def = GetOperatorDefinition(input, StarTokenId, left->type, right->type);
+			
+			if(def)
+			{
+				e = (Expression *)PushOperatorCallExpression(&input->arena, def, left, right);
+			}
+			else if(!TypesEqual(left->type, right->type))
 			{
 				SetError(input, "Types do not match for '*'.");
 				return 0;
 			}
-			
-			e = (Expression *)PushMultiplyExpression(&input->arena, left, right);
+			else
+			{
+				e = (Expression *)PushMultiplyExpression(&input->arena, left, right);
+			}
 		}
 		else
 		{
@@ -2717,10 +2726,19 @@ func ReadOperatorDefinition(ParseInput *input)
 	ReadTokenId(input, OperatorTokenId);
 	
 	Token op = ReadToken(input);
-	if(op.id != MinusTokenId)
+	switch(op.id)
 	{
-		SetError(input, "Invalid operator.");
-		return 0;
+		case MinusTokenId:
+		case PlusTokenId:
+		case StarTokenId:
+		{
+			break;
+		}
+		default:
+		{
+			SetError(input, "Invalid operator.");
+			return 0;			
+		}
 	}
 	
 	def->op = op.id;

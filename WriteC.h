@@ -295,6 +295,13 @@ func WriteExpression(Output *output, Expression *expression)
 			WriteExpression(output, e->right);
 			break;
 		}
+		case NegativeExpressionId:
+		{
+			NegativeExpression *e = (NegativeExpression *)expression;
+			WriteString(output, "-");
+			WriteExpression(output, e->value);
+			break;
+		}
 		case OperatorCallExpressionId:
 		{
 			OperatorCallExpression *e = (OperatorCallExpression *)expression;
