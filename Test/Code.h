@@ -71,10 +71,10 @@ Quad2 GetRotatedQuadAroundPoint(float2 center, float2 cos_sin, float2 size)
     float2 to_x = mul_float_float2((0.5f * size.x), x_dir);
     float2 top = add_float2(center, to_y);
     float2 bottom = sub_float2(center, to_y);
-    q.p[0] = sub_float2(top, to_x);
-    q.p[1] = add_float2(top, to_x);
-    q.p[2] = add_float2(bottom, to_x);
-    q.p[3] = sub_float2(bottom, to_x);
+    q.p[0] = add_float2(top, to_x);
+    q.p[1] = sub_float2(top, to_x);
+    q.p[2] = sub_float2(bottom, to_x);
+    q.p[3] = add_float2(bottom, to_x);
     return q;
 }
 

@@ -74,10 +74,10 @@ func GetRotatedQuadAroundPoint(center: float2, cos_sin: float2, size: float2) Qu
 	top := center + to_y;
 	bottom := center - to_y;
 	
-	q.p[0] = top - to_x;
-	q.p[1] = top + to_x;
-	q.p[2] = bottom + to_x;
-	q.p[3] = bottom - to_x;
+	q.p[0] = top + to_x;
+	q.p[1] = top - to_x;
+	q.p[2] = bottom - to_x;
+	q.p[3] = bottom + to_x;
 	
 	return q;
 }

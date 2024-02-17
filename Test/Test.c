@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 
 #include "Code.h"
 
@@ -21,17 +22,24 @@ static void DrawScene(Bitmap *bitmap)
 {
 	FillWithColor(bitmap, (unsigned int)0x000000);
 	
-	DrawRectMinMax(bitmap, 10, 10, 20, 20, (unsigned int)0x000000);
+	float2 center = Float2XY(100.0f, 100.0f);
 	
-	float min = 10.0f;
-	float max = 110.0f;
-	float mid = (min + max) / 2.0f;
+	static float t = 0.0f;
+	t += 0.01f;
 	
+	float2 cos_sin = Float2XY(cosf(t), sinf(t));
+	
+	float2 size = Float2XY(25.0f, 50.0f);
+	
+	Quad2 quad = GetRotatedQuadAroundPoint(center, cos_sin, size);
+	
+	/*
 	Quad2 quad = {};
 	quad.p[0] = Float2XY(mid, min);
 	quad.p[1] = Float2XY(min, mid);
 	quad.p[2] = Float2XY(mid, max);
 	quad.p[3] = Float2XY(max, mid);
+	*/
 	
 	DrawQuad2(bitmap, quad, (unsigned int)0xFF0000);
 }
