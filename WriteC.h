@@ -163,8 +163,14 @@ func WriteFuncHeader(Output *output, FuncHeader *header)
 	FuncParam *param = header->first_param;
 	while(param)
 	{
-		if(is_first_param) is_first_param = false;
-		else WriteString(output, ", ");
+		if(is_first_param)
+		{
+			is_first_param = false;
+		}
+		else
+		{
+			WriteString(output, ", ");
+		}
 		
 		WriteTypeAndVar(output, param->type, param->name);
 		
@@ -287,6 +293,17 @@ func WriteExpression(Output *output, Expression *expression)
 			WriteExpression(output, e->left);
 			WriteString(output, " * ");
 			WriteExpression(output, e->right);
+			break;
+		}
+		case OperatorCallExpressionId:
+		{
+			OperatorCallExpression *e = (OperatorCallExpression *)expression;
+			WriteToken(output, e->def->name);
+			WriteString(output, "(");
+			WriteExpression(output, e->left);
+			WriteString(output, ", ");
+			WriteExpression(output, e->right);
+			WriteString(output, ")");
 			break;
 		}
 		case ParenExpressionId:
@@ -525,6 +542,34 @@ func WriteDefinitionList(Output *output, DefinitionList *def_list)
 				WriteFuncHeader(output, &def->header);
 				WriteString(output, "\n");
 
+				WriteBlock(output, def->body);
+				WriteString(output, "\n");
+				
+				break;
+			}
+			case OperatorDefinitionId:
+			{
+				OperatorDefinition *def = (OperatorDefinition *)definition;
+				
+				if(def->return_type)
+				{
+					WriteType(output, def->return_type);
+					WriteString(output, " ");
+				}
+				else
+				{
+					WriteString(output, "void ");
+				}
+				
+				WriteToken(output, def->name);
+				WriteString(output, "(");
+				
+				WriteTypeAndVar(output, def->left_type, def->left_name);
+				WriteString(output, ", ");
+				
+				WriteTypeAndVar(output, def->right_type, def->right_name);
+				WriteString(output, ")\n");
+				
 				WriteBlock(output, def->body);
 				WriteString(output, "\n");
 				

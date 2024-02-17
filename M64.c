@@ -2753,6 +2753,7 @@ func ReadOperatorDefinition(ParseInput *input)
 	StackState stack_state = GetStackState(input);
 	
 	OperatorDefinition *def = ArenaPushType(&input->arena, OperatorDefinition);
+	def->def.id = OperatorDefinitionId;
 	
 	ReadTokenId(input, OperatorTokenId);
 	

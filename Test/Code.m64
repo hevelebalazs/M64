@@ -48,8 +48,8 @@ operator- F2sub(p1:float2, p2:float2) float2
 
 func TurnsRight(p0, p1, p2: float2) bool
 {
-	d0 := F2sub(p1, p0);
-	d1 := F2sub(p2, p1);
+	d0 := p1 - p0;
+	d1 := p2 - p0;
 	
 	det := (d0.x * d1.y) - (d0.y * d1.x);
 	turns_right := (det < 0.0);
