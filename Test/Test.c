@@ -21,7 +21,19 @@ static void DrawScene(Bitmap *bitmap)
 {
 	FillWithColor(bitmap, (unsigned int)0x000000);
 	
-	DrawRectMinMax(bitmap, 10, 10, 20, 20, (unsigned int)0xFFFFFF);
+	DrawRectMinMax(bitmap, 10, 10, 20, 20, (unsigned int)0x000000);
+	
+	float min = 10.0f;
+	float max = 110.0f;
+	float mid = (min + max) / 2.0f;
+	
+	Quad2 quad = {};
+	quad.p[0] = Float2XY(mid, min);
+	quad.p[1] = Float2XY(min, mid);
+	quad.p[2] = Float2XY(mid, max);
+	quad.p[3] = Float2XY(max, mid);
+	
+	DrawQuad2(bitmap, quad, (unsigned int)0xFF0000);
 }
 
 LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
