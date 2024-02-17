@@ -529,12 +529,6 @@ func WriteDefinitionList(Output *output, DefinitionList *def_list)
 		Definition *definition = elem->definition;
 		switch(definition->id)
 		{
-			case CCodeDefinitionId:
-			{
-				CCodeDefinition *def = (CCodeDefinition *)definition;
-				WriteToken(output, def->code);
-				break;
-			}
 			case FuncDefinitionId:
 			{
 				FuncDefinition *def = (FuncDefinition *)definition;

@@ -55,7 +55,6 @@ typedef enum tdef TokenId
 	
 	AndEqualsTokenId,
 	AtTokenId,
-	CCodeTokenId,
 	CloseBracesTokenId,
 	CloseBracketsTokenId,
 	CloseBracketsCloseBracketsTokenId,
@@ -86,7 +85,6 @@ typedef enum tdef TokenId
 	OperatorTokenId,
 	PlusPlusTokenId,
 	PlusTokenId,
-	PoundCCodeTokenId,
 	ReturnTokenId,
 	SemiColonTokenId,
 	StarTokenId,
@@ -646,19 +644,6 @@ func ReadToken(ParseInput *input)
 		token.id = AndEqualsTokenId;
 		pos->at += 2;
 		token.length = 2;
-	}
-	else if(pos->at[0] == '#')
-	{
-		pos->at++;
-		token.length++;
-		while(IsAlpha(pos->at[0]))
-		{
-			token.length++;
-			pos->at++;
-		}
-
-		if(TokenEquals(token, "#c_code"))
-			token.id = PoundCCodeTokenId;
 	}
 	else if(IsDigit(pos->at[0]))
 	{
@@ -1250,7 +1235,6 @@ func PushSubtractExpression(MemoryArena *arena, Expression *left, Expression *ri
 
 typedef enum tdef DefinitionId
 {
-	CCodeDefinitionId,
 	ExternFuncDefinitionId,
 	FuncDefinitionId,
 	OperatorDefinitionId,
@@ -2129,40 +2113,6 @@ typedef struct tdef DefinitionList
 
 typedef DefinitionList tdef DefinitionListElem;
 
-typedef struct tdef CCodeDefinition
-{
-	Definition def;
-	
-	Token code;
-} CCodeDefinition;
-
-static CCodeDefinition *
-func ReadCCodeDefinition(ParseInput *input)
-{
-	CCodeDefinition *def = ArenaPushType(&input->arena, CCodeDefinition);
-	def->def.id = CCodeDefinitionId;
-	
-	ReadTokenId(input, PoundCCodeTokenId);
-	
-	if(!ReadTokenId(input, OpenBracesTokenId))
-	{
-		SetError(input, "Expected '{' after '#c_code'!");
-		return 0;
-	}
-	
-	Token c_code_token = ReadTokenUntilClosingBraces(input);
-	c_code_token.id = CCodeTokenId;
-	def->code = c_code_token;
-
-	if(!ReadTokenId(input, CloseBracesTokenId))
-	{
-		SetError(input, "No matching '}' after '#c_code'!");
-		return 0;
-	}
-	
-	return def;
-}
-
 static ArrayType *
 func PushArrayType(MemoryArena *arena, Expression *size, VarType *element_type)
 {
@@ -3030,11 +2980,7 @@ func ReadDefinition(ParseInput *input)
 {
 	Definition *def = 0;
 	Token token = PeekToken(input);
-	if(token.id == PoundCCodeTokenId)
-	{
-		def = (Definition *)ReadCCodeDefinition(input);
-	}
-	else if(token.id == FuncTokenId)
+	if(token.id == FuncTokenId)
 	{
 		def = (Definition *)ReadFuncDefinition(input);
 	}

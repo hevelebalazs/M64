@@ -170,11 +170,6 @@ func X64WriteDefinitionList(X64Output *output, DefinitionList *def_list)
 		Definition *definition = elem->definition;
 		switch(definition->id)
 		{
-			case CCodeDefinitionId:
-			{
-				printf("C code to x64 is not supported!\n");
-				break;
-			}
 			case FuncDefinitionId:
 			{
 				FuncDefinition *def = (FuncDefinition *)definition;
