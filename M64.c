@@ -1653,6 +1653,26 @@ func ReadProductLevelExpression(ParseInput *input)
 	return e;
 }
 
+static bool
+func CanSubtractType(VarType *type)
+{
+	if(type->id == BaseTypeId)
+	{
+		BaseType *t = (BaseType *)type;
+		switch(t->base_id)
+		{
+			case Int32BaseTypeId:
+			case Float32BaseTypeId:
+			case UInt32BaseTypeId:
+			{
+				return true;
+			}
+		}
+	}
+	
+	return false;
+}
+
 static Expression *
 func ReadSumLevelExpression(ParseInput *input)
 {
@@ -1692,6 +1712,12 @@ func ReadSumLevelExpression(ParseInput *input)
 				SetError(input, "Types do not match for '-'.");
 				WriteErrorMessageVarType("Left:  ", left->type);
 				WriteErrorMessageVarType("Right: ", right->type);
+				return 0;
+			}
+			if(!CanSubtractType(left->type))
+			{
+				SetError(input, "Cannot use '-' on type.");
+				WriteErrorMessageVarType("Type: ", left->type);
 				return 0;
 			}
 			
@@ -2887,7 +2913,8 @@ func WriteErrorVarType(VarType *type)
 		case StructTypeId:
 		{
 			StructType *t = (StructType *)type;
-			printf("struct %.*s", t->def->name);
+			printf("struct %.*s", t->def->name.length, t->def->name.text);
+			break;
 		}
 		default:
 		{
