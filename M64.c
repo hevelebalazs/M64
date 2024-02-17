@@ -2146,7 +2146,6 @@ func ReadVarType(ParseInput *input)
 		VarType *pointed_type = ReadVarType(input);
 		if(!pointed_type)
 		{
-			SetError(input, "Expected variable type after '@'.");
 			return 0;
 		}
 		
