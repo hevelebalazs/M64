@@ -41,9 +41,45 @@ func Float2XY(x, y: float) float2
 	return result;
 }
 
-operator- F2sub(p1:float2, p2:float2) float2
+func TurnToRight(v : float2) float2
+{
+	return Float2XY(-v.y, v.x);
+}
+
+operator* mul_float_float2(x: float, v: float2) float2
+{
+	return Float2XY(x * v.x, x * v.y);
+}
+
+operator- sub_float2(p1:float2, p2:float2) float2
 {
 	return Float2XY(p1.x - p2.x, p1.y - p2.y);
+}
+
+operator+ add_float2(p1:float2, p2:float2) float2
+{
+	return Float2XY(p1.x + p2.x, p1.y + p2.y);
+}
+
+func GetRotatedQuadAroundPoint(center: float2, cos_sin: float2, size: float2) Quad2
+{
+	q:Quad2;
+	
+	y_dir := cos_sin;
+	x_dir := TurnToRight(cos_sin);
+	
+	to_y := (0.5 * size.y) * y_dir;
+	to_x := (0.5 * size.x) * x_dir;
+	
+	top := center + to_y;
+	bottom := center - to_y;
+	
+	q.p[0] = top - to_x;
+	q.p[1] = top + to_x;
+	q.p[2] = bottom + to_x;
+	q.p[3] = bottom - to_x;
+	
+	return q;
 }
 
 func TurnsRight(p0, p1, p2: float2) bool
