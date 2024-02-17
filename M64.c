@@ -902,6 +902,7 @@ typedef enum tdef ExpressionId
 	LessThanExpressionId,
 	LessThanEqualExpressionId,
 	MultiplyExpressionId,
+	NegativeExpressionId,
 	OperatorCallExpressionId,
 	ParenExpressionId,
 	StructVarExpressionId,
@@ -1152,6 +1153,24 @@ func PushMultiplyExpression(MemoryArena *arena, Expression *left, Expression *ri
 	e->left = left;
 	e->right = right;
 	e->e.modifiable = false;
+	return e;
+}
+
+typedef struct tdef NegativeExpression
+{
+	Expression e;
+	
+	Expression *value;
+} NegativeExpression;
+
+static NegativeExpression *
+func PushNegativeExpression(MemoryArena *arena, Expression *value)
+{
+	NegativeExpression *e = ArenaPushType(arena, NegativeExpression);
+	e->e.id = NegativeExpressionId;
+	e->e.type = value->type;
+	
+	e->value = value;
 	return e;
 }
 
@@ -1423,6 +1442,7 @@ func ReadNumberLevelExpression(ParseInput *input)
 		Expression *value = ReadNumberLevelExpression(input);
 		if(!value)
 		{
+			SetError(input, "Expected expression after '::'.");
 			return 0;
 		}
 
@@ -1439,6 +1459,17 @@ func ReadNumberLevelExpression(ParseInput *input)
 	else if(ReadTokenId(input, FalseTokenId) || ReadTokenId(input, TrueTokenId))
 	{
 		e = (Expression *)PushBoolConstantExpression(&input->arena, input->last_token, input->bool_type);
+	}
+	else if(ReadTokenId(input, MinusTokenId))
+	{
+		Expression *value = ReadNumberLevelExpression(input);
+		if(!value)
+		{
+			SetError(input, "Expected expression after '-'.");
+			return 0;
+		}
+		
+		e = (Expression *)PushNegativeExpression(&input->arena, value);
 	}
 	else if(ReadTokenId(input, OpenParenTokenId))
 	{
