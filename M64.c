@@ -1765,15 +1765,24 @@ func ReadSumLevelExpression(ParseInput *input)
 				SetError(input, "Expected expression after '+'.");
 				return 0;
 			}
-			if(!TypesEqual(left->type, right->type))
+			
+			OperatorDefinition *def = GetOperatorDefinition(input, PlusTokenId, left->type, right->type);
+			
+			if(def)
+			{
+				e = (Expression *)PushOperatorCallExpression(&input->arena, def, left, right);
+			}
+			else if(!TypesEqual(left->type, right->type))
 			{
 				SetError(input, "Types do not match for '+'.");
 				WriteErrorMessageVarType("Left:  ", left->type);
 				WriteErrorMessageVarType("Right: ", right->type);
 				return 0;
 			}
-			
-			e = (Expression *)PushAddExpression(&input->arena, left, right);
+			else
+			{
+				e = (Expression *)PushAddExpression(&input->arena, left, right);
+			}
 		}
 		else if(ReadTokenId(input, MinusTokenId))
 		{
