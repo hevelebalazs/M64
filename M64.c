@@ -88,7 +88,8 @@ typedef enum tdef TokenId
 	StarTokenId,
 	StructTokenId,
 	ToTokenId,
-	TrueTokenId
+	TrueTokenId,
+	UseTokenId
 } TokenId;
 
 typedef struct tdef Token
@@ -735,6 +736,10 @@ func ReadToken(ParseInput *input)
 		{
 			token.id = TrueTokenId;
 		}
+		else if(TokenEquals(token, "use"))
+		{
+			token.id = UseTokenId;
+		}
 		else
 		{
 			token.id = NameTokenId;
@@ -1365,6 +1370,7 @@ typedef struct tdef StructDefinition
 
 	Token name;
 	StructVar *first_var;
+	StructVar *used_var;
 } StructDefinition;
 
 static StructVarExpression *
@@ -2909,6 +2915,8 @@ func ReadStructDefinition(ParseInput *input)
 		return 0;
 	}
 	
+	StructVar *used_var = 0;
+	
 	StructVar *first_var = 0;
 	StructVar *last_var = 0;
 	while(1)
@@ -2917,11 +2925,23 @@ func ReadStructDefinition(ParseInput *input)
 		{
 			break;
 		}
+		
+		bool use = false;
+		if(ReadTokenId(input, UseTokenId))
+		{
+			use = true;
+		}
 	
 		NameList name_list = ReadNameList(input);
 		if(name_list.size == 0)
 		{
 			SetError(input, "Expected struct variable name.");
+			break;
+		}
+		
+		if(use && name_list.size > 1)
+		{
+			SetError(input, "Can only use one variable of a type.");
 			break;
 		}
 		
@@ -2934,6 +2954,18 @@ func ReadStructDefinition(ParseInput *input)
 		VarType *type = ReadVarType(input);
 		if(type == 0)
 		{
+			return 0;
+		}
+		
+		if(use && type->id != ArrayTypeId)
+		{
+			SetError(input, "Can only use array variable.");
+			return 0;
+		}
+		
+		if(use && used_var)
+		{
+			SetError(input, "Multiple used structure variables.");
 			return 0;
 		}
 		
@@ -2956,6 +2988,11 @@ func ReadStructDefinition(ParseInput *input)
 			}
 		}
 		
+		if(use)
+		{
+			used_var = last_var;
+		}
+		
 		if(!ReadTokenId(input, SemiColonTokenId))
 		{
 			SetError(input, "Expected ';' after struct variable definition.");
@@ -2965,6 +3002,7 @@ func ReadStructDefinition(ParseInput *input)
 	
 	def->name = name;
 	def->first_var = first_var;
+	def->used_var = used_var;
 	
 	def->next = input->first_struct_definition;
 	input->first_struct_definition = def;
