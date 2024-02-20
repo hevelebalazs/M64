@@ -71,10 +71,10 @@ Quad2 GetRotatedQuadAroundPoint(float2 center, float2 cos_sin, float2 size)
     float2 to_x = mul_float_float2((0.5f * size.x), x_dir);
     float2 top = add_float2(center, to_y);
     float2 bottom = sub_float2(center, to_y);
-    q[0] = add_float2(top, to_x);
-    q[1] = sub_float2(top, to_x);
-    q[2] = sub_float2(bottom, to_x);
-    q[3] = add_float2(bottom, to_x);
+    q.p[0] = add_float2(top, to_x);
+    q.p[1] = sub_float2(top, to_x);
+    q.p[2] = sub_float2(bottom, to_x);
+    q.p[3] = add_float2(bottom, to_x);
     return q;
 }
 
@@ -90,23 +90,23 @@ int TurnsRight(float2 p0, float2 p1, float2 p2)
 int IsPointInQuad2(float2 p, Quad2 q)
 {
     int is_inside = 1;
-    is_inside &= TurnsRight(q[0], q[1], p);
-    is_inside &= TurnsRight(q[1], q[2], p);
-    is_inside &= TurnsRight(q[2], q[3], p);
-    is_inside &= TurnsRight(q[3], q[0], p);
+    is_inside &= TurnsRight(q.p[0], q.p[1], p);
+    is_inside &= TurnsRight(q.p[1], q.p[2], p);
+    is_inside &= TurnsRight(q.p[2], q.p[3], p);
+    is_inside &= TurnsRight(q.p[3], q.p[0], p);
     return is_inside;
 }
 
 void DrawQuad2(Bitmap *bitmap, Quad2 quad, unsigned int color)
 {
-    float min_x = quad[0].x;
-    float max_x = quad[0].x;
-    float min_y = quad[0].y;
-    float max_y = quad[0].y;
+    float min_x = quad.p[0].x;
+    float max_x = quad.p[0].x;
+    float min_y = quad.p[0].y;
+    float max_y = quad.p[0].y;
     for(int i = 1; i < 4; i++)
     {
-        float x = quad[i].x;
-        float y = quad[i].y;
+        float x = quad.p[i].x;
+        float y = quad.p[i].y;
         if(x < min_x)
         {
             min_x = x;

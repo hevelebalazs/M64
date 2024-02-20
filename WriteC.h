@@ -196,7 +196,19 @@ func WriteExpression(Output *output, Expression *expression)
 		case ArrayIndexExpressionId:
 		{
 			ArrayIndexExpression *e = (ArrayIndexExpression *)expression;
-			WriteExpression(output, e->array);
+			
+			if(e->array->type->id == StructTypeId)
+			{
+				StructType *type = (StructType *)e->array->type;
+				WriteExpression(output, e->array);
+				WriteString(output, ".");
+				WriteToken(output, type->def->used_var->name);
+			}
+			else
+			{
+				WriteExpression(output, e->array);
+			}
+
 			WriteString(output, "[");
 			WriteExpression(output, e->index);
 			WriteString(output, "]");
