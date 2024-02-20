@@ -951,28 +951,7 @@ typedef struct tdef ArrayIndexExpression
 	Expression *index;
 } ArrayIndexExpression;
 
-static ArrayIndexExpression *
-func PushArrayIndexExpression(MemoryArena *arena, Expression *array, Expression *index)
-{
-	ArrayIndexExpression *e = ArenaPushType(arena, ArrayIndexExpression);
-	e->e.id = ArrayIndexExpressionId;
-	e->e.type = 0;
-	if(array->type->id == PointerTypeId)
-	{
-		PointerType *type = (PointerType *)array->type;
-		e->e.type = type->pointed_type;
-	}
-	else if(array->type->id == ArrayTypeId)
-	{
-		ArrayType *type = (ArrayType *)array->type;
-		e->e.type = type->element_type;
-	}
-	
-	e->array = array;
-	e->index = index;
-	e->e.modifiable = true;
-	return e;
-}
+static ArrayIndexExpression *decl PushArrayIndexExpression(MemoryArena *, Expression *, Expression *);
 
 typedef struct tdef BoolConstantExpression
 {
@@ -1369,8 +1348,8 @@ typedef struct tdef StructDefinition
 	struct StructDefinition *next;
 
 	Token name;
-	StructVar *first_var;
 	StructVar *used_var;
+	StructVar *first_var;
 } StructDefinition;
 
 static StructVarExpression *
@@ -1382,6 +1361,36 @@ func PushStructVarExpression(MemoryArena *arena, Expression *base, StructVar *va
 	e->e.type = var->type;
 	e->base = base;
 	e->var_name = var->name;
+	e->e.modifiable = true;
+	return e;
+}
+
+static ArrayIndexExpression *
+func PushArrayIndexExpression(MemoryArena *arena, Expression *array, Expression *index)
+{
+	ArrayIndexExpression *e = ArenaPushType(arena, ArrayIndexExpression);
+	e->e.id = ArrayIndexExpressionId;
+	e->e.type = 0;
+	if(array->type->id == PointerTypeId)
+	{
+		PointerType *type = (PointerType *)array->type;
+		e->e.type = type->pointed_type;
+	}
+	else if(array->type->id == ArrayTypeId)
+	{
+		ArrayType *type = (ArrayType *)array->type;
+		e->e.type = type->element_type;
+	}
+	else if(array->type->id == StructTypeId)
+	{
+		StructType *type = (StructType *)array->type;
+		StructVar *var = type->def->used_var;
+		ArrayType *atype = (ArrayType *)var->type;
+		e->e.type = atype->element_type;
+	}
+	
+	e->array = array;
+	e->index = index;
 	e->e.modifiable = true;
 	return e;
 }
@@ -1590,9 +1599,35 @@ func ReadNumberLevelExpression(ParseInput *input)
 	{
 		if(ReadTokenId(input, OpenBracketsTokenId))
 		{
-			if(!e || !e->type || (e->type->id != PointerTypeId && e->type->id != ArrayTypeId))
+			if(!e || !e->type)
 			{
-				SetError(input, "Cannot index non-array expression.");
+				SetError(input, "Expected expression after '['.");
+				return 0;
+			}
+			
+			bool ok = false;
+			if(!ok)
+			{
+				if(e->type->id == PointerTypeId || e->type->id == ArrayTypeId)
+				{
+					ok = true;
+				}
+			}
+			if(!ok)
+			{
+				if(e->type->id == StructTypeId)
+				{
+					StructType *st = (StructType *)e->type;
+					if(st->def->used_var)
+					{
+						ok = true;
+					}
+				}
+			}
+			
+			if(!ok)
+			{
+				SetError(input, "Cannot use indexing on expression.");
 				return 0;
 			}
 			
