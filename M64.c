@@ -874,10 +874,14 @@ static bool
 func TypesEqual(VarType *type1, VarType *type2)
 {
 	if(!type1 || !type2)
+	{
 		return (type1 == type2);
+	}
 	
 	if(type1->id != type2->id)
+	{
 		return false;
+	}
 	
 	switch(type1->id)
 	{
@@ -886,6 +890,12 @@ func TypesEqual(VarType *type1, VarType *type2)
 			BaseType *base1 = (BaseType *)type1;
 			BaseType *base2 = (BaseType *)type2;
 			return base1->base_id == base2->base_id;
+		}
+		case StructTypeId:
+		{
+			StructType *s1 = (StructType *)type1;
+			StructType *s2 = (StructType *)type2;
+			return s1->def == s2->def;
 		}
 	}
 	
