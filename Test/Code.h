@@ -148,3 +148,27 @@ void DrawRectMinMax(Bitmap *bitmap, int min_row, int min_col, int max_row, int m
         }
     }
 }
+
+typedef struct Input
+{
+    float2 screen_size;
+} Input;
+
+float Min2(float x, float y)
+{
+    if(x < y)
+    {
+        return x;
+    }
+    return y;
+}
+
+void Update(Input *input, Bitmap *bitmap)
+{
+    float min_side = 0.75f * Min2(input->screen_size.x, input->screen_size.y);
+    float2 mid = mul_float_float2(0.5f, input->screen_size);
+    float2 side = Float2XY(min_side, min_side);
+    float2 min = sub_float2(mid, mul_float_float2(0.5f, side));
+    float2 max = add_float2(mid, mul_float_float2(0.5f, side));
+    DrawRectMinMax(bitmap, (int)min.y, (int)min.x, (int)max.y, (int)max.x, (unsigned int)0xFFFF00);
+}

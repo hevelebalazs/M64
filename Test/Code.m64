@@ -155,3 +155,30 @@ func DrawRectMinMax(bitmap: @Bitmap, min_row, min_col, max_row, max_col: int, co
 		}
 	}
 }
+
+struct Input
+{
+	screen_size: float2;
+}
+
+func Min2(x, y : float) float
+{
+	if x < y
+	{
+		return x;
+	}
+	return y;
+}
+
+func Update(input: @Input, bitmap: @Bitmap)
+{
+	min_side := 0.75 * Min2(input.screen_size.x, input.screen_size.y);
+
+	mid := 0.5 * input.screen_size;
+	side := Float2XY(min_side, min_side);
+	
+	min := mid - 0.5 * side;
+	max := mid + 0.5 * side;
+	
+	DrawRectMinMax(bitmap, int::min.y, int::min.x, int::max.y, int::max.x, uint::0xFFFF00);
+}

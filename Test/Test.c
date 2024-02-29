@@ -18,30 +18,9 @@ static void ResizeBitmap(Bitmap *bitmap, int width, int height)
 	bitmap->memory = malloc(width * height * sizeof(unsigned int));
 }
 
-static void DrawScene(Bitmap *bitmap)
+static void DrawScene(Bitmap *bitmap, Input *input)
 {
-	FillWithColor(bitmap, (unsigned int)0x000000);
-	
-	float2 center = Float2XY(100.0f, 100.0f);
-	
-	static float t = 0.0f;
-	t += 0.01f;
-	
-	float2 cos_sin = Float2XY(cosf(t), sinf(t));
-	
-	float2 size = Float2XY(25.0f, 50.0f);
-	
-	Quad2 quad = GetRotatedQuadAroundPoint(center, cos_sin, size);
-	
-	/*
-	Quad2 quad = {};
-	quad.p[0] = Float2XY(mid, min);
-	quad.p[1] = Float2XY(min, mid);
-	quad.p[2] = Float2XY(mid, max);
-	quad.p[3] = Float2XY(max, mid);
-	*/
-	
-	DrawQuad2(bitmap, quad, (unsigned int)0xFF0000);
+	Update(input, bitmap);
 }
 
 LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
@@ -91,7 +70,9 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR p, int pn)
 		return GetLastError();
 	}
 	
-	RECT rect = {0, 0, 1024, 768};
+	int screen_width = 1024;
+	int screen_height = 768;
+	RECT rect = {0, 0, screen_width, screen_height};
 	AdjustWindowRectEx(&rect, WS_OVERLAPPEDWINDOW, FALSE, WS_EX_OVERLAPPEDWINDOW);
 	
 	LONG width = rect.right - rect.left;
@@ -111,6 +92,10 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR p, int pn)
 	}
 	
 	Bitmap *bitmap = &global_bitmap;
+	
+	Input input = {};
+	input.screen_size.x = (float)screen_width;
+	input.screen_size.y = (float)screen_height;
 	
 	int running = 1;
 	while(running)
@@ -140,7 +125,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR p, int pn)
 		int width = rect.right - rect.left;
 		int height = rect.bottom - rect.top;
 		
-		DrawScene(bitmap);
+		DrawScene(bitmap, &input);
 		
 		StretchDIBits(context,
 					  0, 0, bitmap->width, bitmap->height,
