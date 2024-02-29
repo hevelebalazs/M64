@@ -159,6 +159,7 @@ func DrawRectMinMax(bitmap: @Bitmap, min_row, min_col, max_row, max_col: int, co
 struct Input
 {
 	screen_size: float2;
+	time: float;
 }
 
 func Min2(x, y : float) float
@@ -170,6 +171,9 @@ func Min2(x, y : float) float
 	return y;
 }
 
+extern func cosf(x: float) float;
+extern func sinf(x: float) float;
+
 func Update(input: @Input, bitmap: @Bitmap)
 {
 	min_side := 0.75 * Min2(input.screen_size.x, input.screen_size.y);
@@ -180,5 +184,8 @@ func Update(input: @Input, bitmap: @Bitmap)
 	min := mid - 0.5 * side;
 	max := mid + 0.5 * side;
 	
-	DrawRectMinMax(bitmap, int::min.y, int::min.x, int::max.y, int::max.x, uint::0xFFFF00);
+	cos_sin := Float2XY(cosf(input.time), sinf(input.time));
+	
+	quad := GetRotatedQuadAroundPoint(mid, cos_sin, size);
+	DrawQuad2(bitmap, quad, uint::0x00FF00);
 }
