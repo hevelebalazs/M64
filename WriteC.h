@@ -553,10 +553,17 @@ func WriteDefinitionList(Output *output, DefinitionList *def_list)
 				FuncDefinition *def = (FuncDefinition *)definition;
 				
 				WriteFuncHeader(output, &def->header);
-				WriteString(output, "\n");
 
-				WriteBlock(output, def->body);
-				WriteString(output, "\n");
+				if(!def->is_extern)
+				{
+					WriteString(output, "\n");
+					WriteBlock(output, def->body);
+					WriteString(output, "\n");
+				}
+				else
+				{
+					WriteString(output, ";\n");
+				}
 				
 				break;
 			}
