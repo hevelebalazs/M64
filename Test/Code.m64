@@ -186,6 +186,6 @@ func Update(input: @Input, bitmap: @Bitmap)
 	
 	cos_sin := Float2XY(cosf(input.time), sinf(input.time));
 	
-	quad := GetRotatedQuadAroundPoint(mid, cos_sin, size);
+	quad := GetRotatedQuadAroundPoint(mid, cos_sin, side);
 	DrawQuad2(bitmap, quad, uint::0x00FF00);
 }

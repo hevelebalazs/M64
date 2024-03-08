@@ -1228,7 +1228,6 @@ func PushSubtractExpression(MemoryArena *arena, Expression *left, Expression *ri
 
 typedef enum tdef DefinitionId
 {
-	ExternFuncDefinitionId,
 	FuncDefinitionId,
 	OperatorDefinitionId,
 	StructDefinitionId
@@ -1262,6 +1261,8 @@ typedef struct tdef FuncDefinition
 	
 	FuncHeader header;
 	struct BlockInstruction *body;
+	
+	bool is_extern;
 } FuncDefinition;
 
 static FuncDefinition *
@@ -2764,6 +2765,7 @@ func ReadFuncDefinition(ParseInput *input)
 	}
 	
 	def->body = body;
+	def->is_extern = false;
 	
 	input->func_definition = prev_func_definition;
 	
@@ -3055,14 +3057,7 @@ func ReadStructDefinition(ParseInput *input)
 	return def;
 }
 
-typedef struct tdef ExternFuncDefinition
-{
-	Definition def;
-
-	FuncHeader header;
-} ExternFuncDefinition;
-
-static ExternFuncDefinition *
+static FuncDefinition *
 func ReadExternFuncDefinition(ParseInput *input)
 {
 	StackState stack_state = GetStackState(input);
@@ -3075,8 +3070,8 @@ func ReadExternFuncDefinition(ParseInput *input)
 		return 0;
 	}
 	
-	ExternFuncDefinition *def = ArenaPushType(&input->arena, ExternFuncDefinition);
-	def->def.id = ExternFuncDefinitionId;
+	FuncDefinition *def = ArenaPushType(&input->arena, FuncDefinition);
+	def->def.id = FuncDefinitionId;
 	
 	FuncHeader header = ReadFuncHeader(input);
 	if(input->any_error)
@@ -3091,6 +3086,11 @@ func ReadExternFuncDefinition(ParseInput *input)
 	}
 	
 	def->header = header;
+	
+	def->is_extern = true;
+	
+	def->next = input->first_func_definition;
+	input->first_func_definition = def;
 	
 	SetStackState(input, stack_state);
 	
