@@ -3058,13 +3058,15 @@ func ReadStructDefinition(ParseInput *input)
 typedef struct tdef ExternFuncDefinition
 {
 	Definition def;
-	
-	Token name;
+
+	FuncHeader header;
 } ExternFuncDefinition;
 
 static ExternFuncDefinition *
 func ReadExternFuncDefinition(ParseInput *input)
 {
+	StackState stack_state = GetStackState(input);
+	
 	ReadTokenId(input, ExternTokenId);
 	
 	if(!ReadTokenId(input, FuncTokenId))
@@ -3073,23 +3075,24 @@ func ReadExternFuncDefinition(ParseInput *input)
 		return 0;
 	}
 	
-	Token name = ReadToken(input);
-	if(name.id != NameTokenId)
-	{
-		SetError(input, "Expected name for extern function.");
-		return 0;
-	}
-	
-	if(!ReadTokenId(input, SemiColonTokenId))
-	{
-		SetError(input, "Expected ';' after extern function definition.");
-		return 0;
-	}
-	
 	ExternFuncDefinition *def = ArenaPushType(&input->arena, ExternFuncDefinition);
 	def->def.id = ExternFuncDefinitionId;
 	
-	def->name = name;
+	FuncHeader header = ReadFuncHeader(input);
+	if(input->any_error)
+	{
+		return 0;
+	}
+
+	if(!ReadTokenId(input, SemiColonTokenId))
+	{
+		SetError(input, "Expected ';' after extern func definition.");
+		return 0;
+	}
+	
+	def->header = header;
+	
+	SetStackState(input, stack_state);
 	
 	return def;
 }
