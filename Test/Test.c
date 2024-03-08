@@ -125,6 +125,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR p, int pn)
 		int width = rect.right - rect.left;
 		int height = rect.bottom - rect.top;
 		
+		input.time += 0.01f;
 		DrawScene(bitmap, &input);
 		
 		StretchDIBits(context,

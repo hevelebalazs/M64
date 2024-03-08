@@ -170,7 +170,8 @@ float sinf(float x);
 
 void Update(Input *input, Bitmap *bitmap)
 {
-    float min_side = 0.75f * Min2(input->screen_size.x, input->screen_size.y);
+    FillWithColor(bitmap, (unsigned int)0);
+    float min_side = 0.5f * Min2(input->screen_size.x, input->screen_size.y);
     float2 mid = mul_float_float2(0.5f, input->screen_size);
     float2 side = Float2XY(min_side, min_side);
     float2 min = sub_float2(mid, mul_float_float2(0.5f, side));

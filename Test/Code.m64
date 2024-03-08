@@ -176,7 +176,9 @@ extern func sinf(x: float) float;
 
 func Update(input: @Input, bitmap: @Bitmap)
 {
-	min_side := 0.75 * Min2(input.screen_size.x, input.screen_size.y);
+	FillWithColor(bitmap, uint::0);
+
+	min_side := 0.5 * Min2(input.screen_size.x, input.screen_size.y);
 
 	mid := 0.5 * input.screen_size;
 	side := Float2XY(min_side, min_side);
