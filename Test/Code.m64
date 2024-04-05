@@ -33,7 +33,7 @@ struct Quad2
 	use p:[4]float2;
 }
 
-func Float2XY(x, y: float) float2
+func float2_xy(x, y: float) float2
 {
 	result: float2;
 	result.x = x;
@@ -43,22 +43,22 @@ func Float2XY(x, y: float) float2
 
 func TurnToRight(v : float2) float2
 {
-	return Float2XY(-v.y, v.x);
+	return float2_xy(-v.y, v.x);
 }
 
 operator* mul_float_float2(x: float, v: float2) float2
 {
-	return Float2XY(x * v.x, x * v.y);
+	return float2_xy(x * v.x, x * v.y);
 }
 
 operator- sub_float2(p1:float2, p2:float2) float2
 {
-	return Float2XY(p1.x - p2.x, p1.y - p2.y);
+	return float2_xy(p1.x - p2.x, p1.y - p2.y);
 }
 
 operator+ add_float2(p1:float2, p2:float2) float2
 {
-	return Float2XY(p1.x + p2.x, p1.y + p2.y);
+	return float2_xy(p1.x + p2.x, p1.y + p2.y);
 }
 
 func GetRotatedQuadAroundPoint(center: float2, cos_sin: float2, size: float2) Quad2
@@ -135,7 +135,7 @@ func DrawQuad2(bitmap: @Bitmap, quad: Quad2, color: uint)
 	{
 		for col := int::min_x; col < int::max_x + 1; col++
 		{
-			p := Float2XY(float::col, float::row);
+			p := float2_xy(float::col, float::row);
 			if IsPointInQuad2(p, quad)
 			{
 				SetPixelColor(bitmap, row, col, color);
@@ -179,12 +179,31 @@ struct float3
 	x, y, z: float;
 }
 
+func float3_xyz(x, y, z: float) float3
+{
+	r: float3;
+	r.x = x;
+	r.y = y;
+	r.z = z;
+	return r;
+}
+
+operator+ add_float3(p1: float3, p2: float3) float3
+{
+	return float3_xyz(p1.x + p2.x, p1.y + p2.y, p1.z + p2.z);
+}
+
+operator- sub_float2(p1: float3, p2: float3) float3
+{
+	return float3_xyz(p1.x - p2.x, p1.y - p2.y, p1.z - p2.z);
+}
+
 struct float3x3
 {
 	v: [3][3]float;
 }
 
-constructor float3x3_v(v00, v01, v02, v10, v11, v12, v20, v21, v22: float) float3x3
+func float3x3_v(v00, v01, v02, v10, v11, v12, v20, v21, v22: float) float3x3
 {
 	m: float3x3;
 	m.v[0][0] = v00;
@@ -208,11 +227,11 @@ operator* transform3(m: float3x3, v: float3) float3
 	return result;
 }
 
-constructor float3_xyz(x, y, z: float) float3
+func float3_xy_z(xy: float2, z: float) float3
 {
 	r: float3;
-	r.x = x;
-	r.y = y;
+	r.x = xy.x;
+	r.y = xy.y;
 	r.z = z;
 	return r;
 }
@@ -222,7 +241,7 @@ func GetRotationAroundY(cos_sin: float2) float3x3
 	c := cos_sin.x;
 	s := cos_sin.y;
 	
-	tm: float3x3
+	tm := float3x3_v
 	(
 		  c, 0.0,   s,
 		0.0, 1.0, 0.0,
@@ -234,17 +253,17 @@ func GetRotationAroundY(cos_sin: float2) float3x3
 
 func ToXY(v: float3) float2
 {
-	return float2(v.x, v.y);
+	return float2_xy(v.x, v.y);
 }
 
-func DrawQuad3(Bitmap: @Bitmap, v1, v2, v3, v4: float3, color: uint)
+func DrawQuad3(bitmap: @Bitmap, v1, v2, v3, v4: float3, color: uint)
 {
 	quad: Quad2;
-	quad.p[0] = ToXY(v1);
-	quad.p[1] = ToXY(v2);
-	quad.p[2] = ToXY(v3);
-	quad.p[3] = ToXY(v4);
-	DrawQuad2(bitmap, quad2, color);
+	quad[0] = ToXY(v1);
+	quad[1] = ToXY(v2);
+	quad[2] = ToXY(v3);
+	quad[3] = ToXY(v4);
+	DrawQuad2(bitmap, quad, color);
 }
 
 func Update3D(input: @Input, bitmap: @Bitmap)
@@ -255,15 +274,15 @@ func Update3D(input: @Input, bitmap: @Bitmap)
 	
 	mid := 0.5 * input.screen_size;
 
-	cube_center := float3(mid, 0.0);
+	cube_center := float3_xy_z(mid, 0.0);
 	cube_side := min_side;
 	
-	cos_sin := Float2XY(cosf(input.time), sinf(input.time));
+	cos_sin := float2_xy(cosf(input.time), sinf(input.time));
 	rot_tm := GetRotationAroundY(cos_sin);
 	
-	x_side := rot_tm * float3(0.5, 0.0, 0.0);
-	y_side := rot_tm * float3(0.0, 0.5, 0.0);
-	z_side := rot_tm * float3(0.0, 0.0, 0.5);
+	x_side := rot_tm * float3_xyz(0.5, 0.0, 0.0);
+	y_side := rot_tm * float3_xyz(0.0, 0.5, 0.0);
+	z_side := rot_tm * float3_xyz(0.0, 0.0, 0.5);
 	
 	corner_ldf := cube_center - x_side - y_side - z_side;
 	corner_ldb := cube_center - x_side - y_side + z_side;
@@ -290,12 +309,12 @@ func Update(input: @Input, bitmap: @Bitmap)
 	min_side := 0.5 * Min2(input.screen_size.x, input.screen_size.y);
 
 	mid := 0.5 * input.screen_size;
-	side := Float2XY(min_side, min_side);
+	side := float2_xy(min_side, min_side);
 	
 	min := mid - 0.5 * side;
 	max := mid + 0.5 * side;
 	
-	cos_sin := Float2XY(cosf(input.time), sinf(input.time));
+	cos_sin := float2_xy(cosf(input.time), sinf(input.time));
 	
 	quad := GetRotatedQuadAroundPoint(mid, cos_sin, side);
 	DrawQuad2(bitmap, quad, uint::0x00FF00);
