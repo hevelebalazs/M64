@@ -168,6 +168,18 @@ float cosf(float x);
 
 float sinf(float x);
 
+typedef struct float3
+{
+    float x;
+    float y;
+    float z;
+} float3;
+
+typedef struct float2x2
+{
+    float v[2][2];
+} float2x2;
+
 void Update(Input *input, Bitmap *bitmap)
 {
     FillWithColor(bitmap, (unsigned int)0);

@@ -124,13 +124,27 @@ func WriteTypeAndVar(Output *output, VarType *type, Token var_name)
 	}
 	else if(type->id == ArrayTypeId)
 	{
-		ArrayType *t = (ArrayType *)type;
-		WriteType(output, t->element_type);
+		VarType *base_type = type;
+		while(base_type->id == ArrayTypeId)
+		{
+			ArrayType *t = (ArrayType *)base_type;
+			base_type = t->element_type;
+		}
+		
+		WriteType(output, base_type);
 		WriteString(output, " ");
 		WriteToken(output, var_name);
-		WriteString(output, "[");
-		WriteExpression(output, t->size);
-		WriteString(output, "]");
+		
+		VarType *t = type;
+		while(t->id == ArrayTypeId)
+		{
+			ArrayType *array_type = (ArrayType *)t;
+			WriteString(output, "[");
+			WriteExpression(output, array_type->size);
+			WriteString(output, "]");
+			
+			t = array_type->element_type;
+		}
 	}
 	else
 	{
