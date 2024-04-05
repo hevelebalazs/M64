@@ -193,7 +193,7 @@ operator+ add_float3(p1: float3, p2: float3) float3
 	return float3_xyz(p1.x + p2.x, p1.y + p2.y, p1.z + p2.z);
 }
 
-operator- sub_float2(p1: float3, p2: float3) float3
+operator- sub_float3(p1: float3, p2: float3) float3
 {
 	return float3_xyz(p1.x - p2.x, p1.y - p2.y, p1.z - p2.z);
 }
@@ -303,19 +303,4 @@ func Update(input: @Input, bitmap: @Bitmap)
 {
 	Update3D(input, bitmap);
 	return;
-
-	FillWithColor(bitmap, uint::0);
-
-	min_side := 0.5 * Min2(input.screen_size.x, input.screen_size.y);
-
-	mid := 0.5 * input.screen_size;
-	side := float2_xy(min_side, min_side);
-	
-	min := mid - 0.5 * side;
-	max := mid + 0.5 * side;
-	
-	cos_sin := float2_xy(cosf(input.time), sinf(input.time));
-	
-	quad := GetRotatedQuadAroundPoint(mid, cos_sin, side);
-	DrawQuad2(bitmap, quad, uint::0x00FF00);
 }

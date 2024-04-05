@@ -481,7 +481,10 @@ func WriteInstruction(Output *output, Instruction *instruction)
 		{
 			ReturnInstruction *i = (ReturnInstruction *)instruction;
 			WriteString(output, "return ");
-			WriteExpression(output, i->value);
+			if(i->value)
+			{
+				WriteExpression(output, i->value);
+			}
 			break;
 		}
 		default:

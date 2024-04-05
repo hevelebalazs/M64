@@ -2638,7 +2638,7 @@ func ReadReturnInstruction(ParseInput *input)
 	
 	if(input->func_definition)
 	{
-		if(!TypesEqual(input->func_definition->header.return_type, value->type))
+		if(!TypesEqual(input->func_definition->header.return_type, value ? value->type : 0))
 		{
 			SetError(input, "Found 'return' with invalid type.");
 			return 0;
@@ -2646,7 +2646,7 @@ func ReadReturnInstruction(ParseInput *input)
 	}
 	else if(input->operator_definition)
 	{
-		if(!TypesEqual(input->operator_definition->return_type, value->type))
+		if(!TypesEqual(input->operator_definition->return_type, value ? value->type : 0))
 		{
 			SetError(input, "Found 'return' with invalid type.");
 			return 0;
