@@ -280,9 +280,9 @@ func Update3D(input: @Input, bitmap: @Bitmap)
 	cos_sin := float2_xy(cosf(input.time), sinf(input.time));
 	rot_tm := GetRotationAroundY(cos_sin);
 	
-	x_side := rot_tm * float3_xyz(0.5, 0.0, 0.0);
-	y_side := rot_tm * float3_xyz(0.0, 0.5, 0.0);
-	z_side := rot_tm * float3_xyz(0.0, 0.0, 0.5);
+	x_side := rot_tm * float3_xyz(0.5 * min_side, 0.0, 0.0);
+	y_side := rot_tm * float3_xyz(0.0, 0.5 * min_side, 0.0);
+	z_side := rot_tm * float3_xyz(0.0, 0.0, 0.5 * min_side);
 	
 	corner_ldf := cube_center - x_side - y_side - z_side;
 	corner_ldb := cube_center - x_side - y_side + z_side;
@@ -294,7 +294,7 @@ func Update3D(input: @Input, bitmap: @Bitmap)
 	corner_rub := cube_center + x_side + y_side + z_side;
 	
 	DrawQuad3(bitmap, corner_luf, corner_ruf, corner_rdf, corner_ldf, uint::0x00FF00);
-	DrawQuad3(bitmap, corner_ruf, corner_rub, corner_rdb, corner_rdf, uint::0xFFFF00);
+	DrawQuad3(bitmap, corner_ruf, corner_rub, corner_rdb, corner_rdf, uint::0xFF8800);
 	DrawQuad3(bitmap, corner_rub, corner_lub, corner_ldb, corner_rdb, uint::0x0000FF);
 	DrawQuad3(bitmap, corner_lub, corner_luf, corner_ldf, corner_ldb, uint::0xFF0000);
 }
@@ -302,5 +302,4 @@ func Update3D(input: @Input, bitmap: @Bitmap)
 func Update(input: @Input, bitmap: @Bitmap)
 {
 	Update3D(input, bitmap);
-	return;
 }

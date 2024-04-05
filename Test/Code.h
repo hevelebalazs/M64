@@ -264,9 +264,9 @@ void Update3D(Input *input, Bitmap *bitmap)
     float cube_side = min_side;
     float2 cos_sin = float2_xy(cosf(input->time), sinf(input->time));
     float3x3 rot_tm = GetRotationAroundY(cos_sin);
-    float3 x_side = transform3(rot_tm, float3_xyz(0.5f, 0.0f, 0.0f));
-    float3 y_side = transform3(rot_tm, float3_xyz(0.0f, 0.5f, 0.0f));
-    float3 z_side = transform3(rot_tm, float3_xyz(0.0f, 0.0f, 0.5f));
+    float3 x_side = transform3(rot_tm, float3_xyz(0.5f * min_side, 0.0f, 0.0f));
+    float3 y_side = transform3(rot_tm, float3_xyz(0.0f, 0.5f * min_side, 0.0f));
+    float3 z_side = transform3(rot_tm, float3_xyz(0.0f, 0.0f, 0.5f * min_side));
     float3 corner_ldf = sub_float3(sub_float3(sub_float3(cube_center, x_side), y_side), z_side);
     float3 corner_ldb = add_float3(sub_float3(sub_float3(cube_center, x_side), y_side), z_side);
     float3 corner_luf = sub_float3(add_float3(sub_float3(cube_center, x_side), y_side), z_side);
@@ -276,7 +276,7 @@ void Update3D(Input *input, Bitmap *bitmap)
     float3 corner_ruf = sub_float3(add_float3(add_float3(cube_center, x_side), y_side), z_side);
     float3 corner_rub = add_float3(add_float3(add_float3(cube_center, x_side), y_side), z_side);
     DrawQuad3(bitmap, corner_luf, corner_ruf, corner_rdf, corner_ldf, (unsigned int)0x00FF00);
-    DrawQuad3(bitmap, corner_ruf, corner_rub, corner_rdb, corner_rdf, (unsigned int)0xFFFF00);
+    DrawQuad3(bitmap, corner_ruf, corner_rub, corner_rdb, corner_rdf, (unsigned int)0xFF8800);
     DrawQuad3(bitmap, corner_rub, corner_lub, corner_ldb, corner_rdb, (unsigned int)0x0000FF);
     DrawQuad3(bitmap, corner_lub, corner_luf, corner_ldf, corner_ldb, (unsigned int)0xFF0000);
 }
@@ -284,5 +284,4 @@ void Update3D(Input *input, Bitmap *bitmap)
 void Update(Input *input, Bitmap *bitmap)
 {
     Update3D(input, bitmap);
-    return ;
 }
