@@ -1616,19 +1616,26 @@ func ReadNumberLevelExpression(ParseInput *input)
 				return 0;
 			}
 			
+			Expression *check_e = e;
+			while(check_e->id == ParenExpressionId)
+			{
+				ParenExpression *paren = (ParenExpression *)check_e;
+				check_e = paren->in;
+			}
+			
 			bool ok = false;
 			if(!ok)
 			{
-				if(e->type->id == PointerTypeId || e->type->id == ArrayTypeId)
+				if(check_e->type->id == PointerTypeId || check_e->type->id == ArrayTypeId)
 				{
 					ok = true;
 				}
 			}
 			if(!ok)
 			{
-				if(e->type->id == StructTypeId)
+				if(check_e->type->id == StructTypeId)
 				{
-					StructType *st = (StructType *)e->type;
+					StructType *st = (StructType *)check_e->type;
 					if(st->def->used_var)
 					{
 						ok = true;
@@ -1639,6 +1646,7 @@ func ReadNumberLevelExpression(ParseInput *input)
 			if(!ok)
 			{
 				SetError(input, "Cannot use indexing on expression.");
+				printf("Expression type: %i\n", (int)check_e->id);
 				return 0;
 			}
 			
@@ -2247,6 +2255,7 @@ func ReadVarType(ParseInput *input)
 		VarType *pointed_type = ReadVarType(input);
 		if(!pointed_type)
 		{
+			*input->pos = start_pos;
 			return 0;
 		}
 		
@@ -2620,6 +2629,11 @@ func ReadReturnInstruction(ParseInput *input)
 	if(!PeekTokenId(input, SemiColonTokenId))
 	{
 		value = ReadExpression(input);
+		if(!PeekTokenId(input, SemiColonTokenId))
+		{
+			SetError(input, "Expected ';' after return.");
+			return 0;
+		}
 	}
 	
 	if(input->func_definition)

@@ -1,3 +1,10 @@
+func Test() int
+{
+	a := 1;
+	return @@@a;
+}
+
+
 struct Bitmap
 {
 	memory: @uint;
@@ -179,9 +186,9 @@ struct float3
 	x, y, z: float;
 }
 
-struct float2x2
+struct float3x3
 {
-	v: [2][2]float;
+	v: [3][3]float;
 }
 
 func Update(input: @Input, bitmap: @Bitmap)
